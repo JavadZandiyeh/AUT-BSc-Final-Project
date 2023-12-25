@@ -18,8 +18,8 @@ Here are the steps and useful documents I utilized in my bachelor's final projec
 >
 
 ## References
-- Lightgcn: Simplifying and powering graph convolution network for recommendation [(link)](https://arxiv.org/pdf/2002.02126.pdf)
-- How Attentive are Graph Attention Networks? [(link)](https://arxiv.org/pdf/2105.14491.pdf)
+- X. He, K. Deng, X. Wang, Y. Li, Y. Zhang, and M. Wang, "***Lightgcn: Simplifying and powering graph convolution network for recommendation***", in Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval, pp. 639-648, 2020. [(link)](https://arxiv.org/pdf/2002.02126.pdf)
+- S. Brody, U. Alon, and E. Yahav, "***How attentive are graph attention networks***", arXiv preprint arXiv:2105.14491, 2021. [(link)](https://arxiv.org/pdf/2105.14491.pdf)
 
 ## Useful Links
 - [Pytorch](https://pytorch.org/docs/stable/index.html): Pytorch Documentation
