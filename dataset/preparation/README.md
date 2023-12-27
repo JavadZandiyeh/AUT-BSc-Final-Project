@@ -50,5 +50,5 @@ The prepared data can be downloaded using bellow links:
 > - [ml-25m.zip](https://files.grouplens.org/datasets/movielens/ml-25m.zip)
 > - [ml-25m-cleaned.zip](https://drive.google.com/file/d/1jMgdgwsGW5jAcLRWb5y2zDthmPWdIFzh/view?usp=drive_link)
 
-![img.png](images/tree-imdb.png)<br/>
-![img.png](images/tree-ml.png)
+![tree-imdb](images/tree-imdb.png)<br/>
+![tree-ml](images/tree-ml.png)
