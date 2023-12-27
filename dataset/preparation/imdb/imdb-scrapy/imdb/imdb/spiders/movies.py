@@ -21,7 +21,7 @@ class MoviesSpider(scrapy.Spider):
         "Cache-Control": "max-age=0",
     }
 
-    file_path = '../../../movielens/ml-25m/links.csv'
+    file_path = 'links.csv'
     with open(file_path, 'r', newline='') as csv_file:
         csv_reader = csv.reader(csv_file)
         next(csv_reader)  # headers

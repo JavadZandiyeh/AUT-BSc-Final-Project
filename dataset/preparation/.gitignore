@@ -1,5 +1,6 @@
 /imdb/imdb-1m
 /imdb/imdb-25m
+/imdb/imdb-scrapy/imdb/links.csv
 /imdb/imdb-scrapy/imdb/movies.csv
 /movielens/ml-1m
 /movielens/ml-25m
