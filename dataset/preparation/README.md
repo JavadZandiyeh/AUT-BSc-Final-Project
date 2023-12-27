@@ -44,7 +44,8 @@
 ### Files tree
 The prepared data can be downloaded using bellow links:
 
-> - [imdb.zip](https://drive.google.com/file/d/1nwpL3_2JXPJBlMH0VmFuGOHBecztNXyL/view?usp=drive_link)
+> - [imdb-1m.zip](https://drive.google.com/file/d/16s_ICcb2RAHD_tXtlsIQyrlh8WGNnrHt/view?usp=drive_link)
+> - [imdb-25m.zip](https://drive.google.com/file/d/1nasqcDolc9O_4MfXQN-aB3EJqHGM75Nm/view?usp=drive_link)
 > - [ml-1m.zip](https://files.grouplens.org/datasets/movielens/ml-1m.zip)
 > - [ml-25m.zip](https://files.grouplens.org/datasets/movielens/ml-25m.zip)
 > - [ml-25m-cleaned.zip](https://drive.google.com/file/d/1jMgdgwsGW5jAcLRWb5y2zDthmPWdIFzh/view?usp=drive_link)
