@@ -1,6 +1,8 @@
 /imdb/imdb-1m
 /imdb/imdb-25m
 /imdb/imdb-scrapy/imdb/movies.csv
+/imdb/imdb-scrapy/imdb/imdb/__pycache__/
+/imdb/imdb-scrapy/imdb/imdb/spiders/__pycache__/
 /movielens/ml-1m
 /movielens/ml-25m
 /movielens/ml-25m-cleaned/changed-imdb-ids.csv
