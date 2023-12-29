@@ -33,7 +33,7 @@
 > - `user_features.dat`: user features and their values
 > - `ui_weights.dat`: the weight between every user-item pair
 
-- Files tree<br/>
+### Files tree
 The prepared matrices can be downloaded using bellow link:
 
 > - [imdb-1m-matrices.zip](https://drive.google.com/file/d/1lZZB9kfmB0oTFBjxugoFAEfBvnIG-vGM/view?usp=drive_link)
