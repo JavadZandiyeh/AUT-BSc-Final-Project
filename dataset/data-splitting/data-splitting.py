@@ -49,21 +49,21 @@ class IMDbDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         # Initialize matrices
         self.user_names, self.user_features, self.item_names = None, None, None
-        self.item_features, self.ii_weights, self.ui_weights = None, None, None
+        self.item_features, self.item_interactions_diff, self.ui_weights = None, None, None
 
         # Dimension of matrices (because the .dat file doesn't store dimensions of matrices)
         self.num_items, self.num_users, self.num_item_features = 3848, 6040, 31
 
         # Connections between items with a weight less than this threshold are ignored
-        self.ii_weight_threshold = 0.1
+        self.item_interactions_diff_threshold = 0.2
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
     def raw_file_names(self):
         """ If these files exist in raw_dir, the download is not triggered """
-        return ['user_names.csv', 'user_features.dat', 'item_names.csv', 'item_features.dat', 'ii_weights.dat',
-                'ui_weights.dat']  # The order matters in the process() function.
+        return ['user_names.csv', 'user_features.dat', 'item_names.csv', 'item_features.dat',
+                'item_interactions_diff.dat', 'ui_weights.dat']  # The order matters in the process() function.
 
     @property
     def processed_file_names(self):
@@ -79,15 +79,15 @@ class IMDbDataset(Dataset):
         self.raw_file_content()
 
         """ item-item dataset """
-        ii_edge_index = np.asarray(np.where(self.ii_weights > self.ii_weight_threshold))
-        ii_edge_attr = self.ii_weights[ii_edge_index[0], ii_edge_index[1]]
+        ii_edge_index = np.asarray(np.where(self.item_interactions_diff > self.item_interactions_diff_threshold))
+        ii_edge_attr = self.item_interactions_diff[ii_edge_index[0], ii_edge_index[1]]
 
         data_ii = Data(
             x=torch.tensor(self.item_features),  # node features
             edge_index=torch.tensor(ii_edge_index),  # edges between items
             edge_attr=torch.tensor(ii_edge_attr)  # weights related to edges
         )
-        # Example: data_ii = Data(x=[3848, 31], edge_index=[2, 4455450], edge_attr=[4455450])
+        # Example: data_ii = Data(x=[3848, 31], edge_index=[2, 4464140], edge_attr=[4464140])
 
         torch.save(data_ii, f'{self.processed_dir}/data_ii.pt')
 
@@ -140,7 +140,7 @@ class IMDbDataset(Dataset):
         # data_ui_validation = Data(x=[9888, 31], edge_index=[2, 199374], edge_attr=[199374])
 
         # Delete matrices to reduce memory usage, as we don't need them anymore
-        del self.user_names, self.user_features, self.item_names, self.item_features, self.ii_weights, self.ui_weights
+        del self.user_names, self.user_features, self.item_names, self.item_features, self.item_interactions_diff, self.ui_weights
 
     def raw_file_content(self):
         """ Fetch data and set our matrices """
@@ -167,7 +167,7 @@ class IMDbDataset(Dataset):
         )
 
         # item-item weights
-        self.ii_weights = np.memmap(
+        self.item_interactions_diff = np.memmap(
             self.raw_paths[4],
             dtype=np.float32,
             mode='r',

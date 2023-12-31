@@ -9,7 +9,7 @@ As an example, below are the steps used to divide the imdb-1m dataset into train
 
 - Step 1: item-item dataset
 > A graph dataset named data_ii containing the features below is created:<br/>
-> data_ii = Data(x=[3848, 31], edge_index=[2, 4455450], edge_attr=[4455450])
+> data_ii = Data(x=[3848, 31], edge_index=[2, 4464140], edge_attr=[4464140])
 > - x: item features
 > - edge_index: edges
 > - edge_attr: weights of edges
@@ -23,6 +23,6 @@ As an example, below are the steps used to divide the imdb-1m dataset into train
 ### Files tree<br/>
 The prepared matrices can be downloaded using bellow link:
 
-> - [imdb-1m-splitted](https://drive.google.com/file/d/1ZzaHJYxCo9gdAgVjpva6WbR2yeS0YzSm/view?usp=sharing)
+> - [imdb-1m-splitted](https://drive.google.com/file/d/1MN11SFOPDh3CSC3ERDGvEzZUF4C07HrX/view?usp=sharing)
 
 ![tree](images/tree-imdb-1m-splitted.png)
