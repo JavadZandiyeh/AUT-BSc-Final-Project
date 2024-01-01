@@ -3,8 +3,9 @@ import torch_geometric as pyg
 
 
 def get_edge_att_optimized(x, edge_index, edge_attr):
-    """ A memory-optimized edge attention calculator implemented
-    with chunk processing to enhance efficiency in handling large datasets
+    """ A memory-optimized edge attention calculator has been implemented with chunk processing
+    to enhance efficiency in handling large datasets. This function takes the edge attributes
+    as input and returns the corresponding edge attentions.
     """
 
     # Initialize values
@@ -37,7 +38,7 @@ def get_edge_att_optimized(x, edge_index, edge_attr):
 
 
 def get_edge_att(x, edge_index, edge_attr):
-    """ An edge attention calculator """
+    """ This function takes the edge attributes as input and returns the corresponding edge attentions. """
 
     # Initialize values
     num_nodes, num_features = x.size()
