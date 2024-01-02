@@ -1,5 +1,6 @@
 import csv
 import sys
+
 import numpy as np
 import torch
 from torch_geometric.data import Dataset, Data
@@ -45,6 +46,28 @@ def train_test_validation_division(matrix):
     return train, test, validation
 
 
+def spars_matrix(matrix, degree_cutoff=None):
+    degree_cutoff = int(0.3 * matrix.shape[0]) if (degree_cutoff is None) else degree_cutoff
+    mask = np.where(matrix != 0, 1, 0)
+
+    while True:
+        degrees = np.sum(mask, axis=0)
+        index = int(np.argmax(degrees))
+
+        if degrees[index] <= degree_cutoff:
+            break
+
+        indices = np.argsort(-matrix[index] * mask[index])[:degree_cutoff]
+
+        updated_mask_row = np.zeros_like(mask[index])
+        updated_mask_row[indices] = 1
+
+        mask[index, :] = updated_mask_row
+        mask[:, index] = updated_mask_row
+
+    return matrix * mask
+
+
 class IMDbDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         # Initialize matrices
@@ -55,7 +78,10 @@ class IMDbDataset(Dataset):
         self.num_items, self.num_users, self.num_item_features = 3848, 6040, 31
 
         # Connections between items with a weight less than this threshold are ignored
-        self.item_interactions_diff_threshold = 0.2
+        self.item_interactions_diff_threshold = 0
+
+        # The maximum number of connections allowed for each item
+        self.max_item_degree_threshold = 120
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
@@ -79,13 +105,15 @@ class IMDbDataset(Dataset):
         self.raw_file_content()
 
         """ item-item dataset """
-        ii_edge_index = np.asarray(np.where(self.item_interactions_diff > self.item_interactions_diff_threshold))
-        ii_edge_attr = self.item_interactions_diff[ii_edge_index[0], ii_edge_index[1]]
+        spars_item_interaction_diff = spars_matrix(self.item_interactions_diff, self.max_item_degree_threshold)
+
+        ii_edge_index = np.asarray(np.where(spars_item_interaction_diff > self.item_interactions_diff_threshold))
+        ii_edge_attr = spars_item_interaction_diff[ii_edge_index[0], ii_edge_index[1]]
 
         data_ii = Data(
-            x=torch.tensor(self.item_features),  # node features
-            edge_index=torch.tensor(ii_edge_index),  # edges between items
-            edge_attr=torch.tensor(ii_edge_attr)  # weights related to edges
+            x=torch.tensor(self.item_features, dtype=torch.float),  # node features
+            edge_index=torch.tensor(ii_edge_index, dtype=torch.long),  # edges between items
+            edge_attr=torch.tensor(ii_edge_attr, dtype=torch.float)  # weights related to edges
         )
         # Example: data_ii = Data(x=[3848, 31], edge_index=[2, 4464140], edge_attr=[4464140])
 
@@ -121,9 +149,9 @@ class IMDbDataset(Dataset):
         # part 5
         def get_data_ui(ui_edge_index, ui_edge_attr):
             return Data(
-                x=torch.tensor(ui_node_features),
-                edge_index=torch.tensor(ui_edge_index),
-                edge_attr=torch.tensor(ui_edge_attr)
+                x=torch.tensor(ui_node_features, dtype=torch.float),
+                edge_index=torch.tensor(ui_edge_index, dtype=torch.long),
+                edge_attr=torch.tensor(ui_edge_attr, dtype=torch.float)
             )
 
         data_ui_train = get_data_ui(ui_edge_index_train, ui_edge_attr_train)
@@ -192,7 +220,7 @@ class IMDbDataset(Dataset):
 
 if __name__ == '__main__':
     dataset = IMDbDataset(root=sys.argv[1])
-    print(dataset.get('data_ii'))
-    print(dataset.get('data_ui_train'))
-    print(dataset.get('data_ui_test'))
-    print(dataset.get('data_ui_validation'))
+    print('data_ii: ', dataset.get('data_ii'))
+    print('data_ui_train: ', dataset.get('data_ui_train'))
+    print('data_ui_test: ', dataset.get('data_ui_test'))
+    print('data_ui_validation: ', dataset.get('data_ui_validation'))
