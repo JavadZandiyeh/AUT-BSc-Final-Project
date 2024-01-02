@@ -1,15 +1,12 @@
-from typing import Optional
-
 import torch
 import torch_geometric as pyg
-from torch import Tensor
 
 import utils
 
 
 class CustomizedGAT(pyg.nn.MessagePassing):
     def __init__(self, in_channels, out_channels):
-        super().__init__(aggr='add')  # "Add" aggregation (Step 5).
+        super().__init__(aggr='add')  # "Add" aggregation
         self.linear = torch.nn.Linear(in_channels, out_channels, bias=False)
         self.bias = torch.nn.Parameter(torch.empty(out_channels))
         self.reset_parameters()
@@ -19,8 +16,6 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         self.bias.data.zero_()
 
     def forward(self, x, edge_index, edge_attr):
-        num_nodes, num_features = x.size()
-
         # Compute edge attentions
         _, edge_att = utils.get_edge_att(x, edge_index, edge_attr)
 
@@ -36,10 +31,23 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         # Propagate messages
         out = self.propagate(edge_index=edge_index, x=x, edge_att=edge_att)
 
-        # Add bias
         out += self.bias
+        out = torch.sigmoid(out)
 
         return out
 
-    def message(self, x_j, x, edge_att):
+    def message(self, x_j, edge_att):
         return edge_att.view(-1, 1) * x_j
+
+
+class ItemItemModel(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels):
+        super().__init__()
+        self.cgat1 = CustomizedGAT(in_channels, hidden_channels)
+        self.cgat2 = CustomizedGAT(hidden_channels, out_channels)
+
+    def forward(self, x, edge_index, edge_attr):
+        h1 = self.cgat1(x, edge_index, edge_attr)
+        h2 = self.cgat2(h1, edge_index, edge_attr)
+
+        return h2

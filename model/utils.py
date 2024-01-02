@@ -46,7 +46,7 @@ def get_edge_att(x, edge_index, edge_attr):
     # Update edge attentions
     edge_att = pyg.utils.to_dense_adj(edge_index, edge_attr=edge_attr).squeeze(0)
     norm_x = torch.norm(x, dim=1).view(num_nodes, 1)
-    cosine_similarity_chuck = (x @ x.T) / (norm_x @ norm_x.T)
-    edge_att = torch.mul(cosine_similarity_chuck, edge_att)
+    cosine_similarity = (x @ x.T) / (norm_x @ norm_x.T)
+    edge_att = torch.mul(cosine_similarity, edge_att)
 
     return pyg.utils.dense_to_sparse(edge_att)  # returns edge_index, edge_attr

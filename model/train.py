@@ -2,9 +2,8 @@ import configparser
 import os
 
 import torch
-import utils
+
 import model_builder
-import torch_geometric as pyg
 
 """ Basic setups """
 # Read configs
@@ -29,5 +28,10 @@ os.environ['TORCH'] = torch.__version__
 if __name__ == '__main__':
     num_nodes, num_features = data_ii.x.size()
 
-    model = model_builder.CustomizedGAT(in_channels=num_features, out_channels=2 * num_features)
-    model(data_ii.x, data_ii.edge_index, data_ii.edge_attr)
+    model = model_builder.ItemItemModel(
+        in_channels=num_features,
+        hidden_channels=num_features,
+        out_channels=num_features
+    )
+
+    out = model(data_ii.x, data_ii.edge_index, data_ii.edge_attr)
