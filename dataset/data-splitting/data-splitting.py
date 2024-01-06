@@ -1,9 +1,13 @@
+import configparser
 import csv
 import sys
 
 import numpy as np
 import torch
 from torch_geometric.data import Dataset, Data
+
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 
 def train_test_validation_division(matrix):
@@ -46,8 +50,7 @@ def train_test_validation_division(matrix):
     return train, test, validation
 
 
-def spars_matrix(matrix, degree_cutoff=None):
-    degree_cutoff = int(0.3 * matrix.shape[0]) if (degree_cutoff is None) else degree_cutoff
+def matrix_sparsify(matrix, degree_cutoff):
     mask = np.where(matrix != 0, 1, 0)
 
     while True:
@@ -59,13 +62,35 @@ def spars_matrix(matrix, degree_cutoff=None):
 
         indices = np.argsort(-matrix[index] * mask[index])[:degree_cutoff]
 
-        updated_mask_row = np.zeros_like(mask[index])
-        updated_mask_row[indices] = 1
-
-        mask[index, :] = updated_mask_row
-        mask[:, index] = updated_mask_row
+        mask[index][indices] = 1
+        mask[:, index] = mask[index, :]
 
     return matrix * mask
+
+
+def matrix_sparsify1(matrix, degree_cutoff):
+    base_mask = np.where(matrix != 0, 1, 0)
+    final_mask = np.zeros_like(matrix, dtype=np.int64)
+
+    processed = np.ones(matrix.shape[0])
+
+    while not np.all(processed == np.inf):
+        prunable_mask = base_mask - final_mask
+
+        degrees = np.sum(prunable_mask, axis=0)
+        index = np.argmin(degrees * processed)
+
+        processed[index] = np.inf
+
+        if (num_prunable := degree_cutoff - sum(final_mask[index])) <= 0:
+            continue
+
+        indices = np.argsort(-matrix[index] * prunable_mask[index])[:num_prunable]
+
+        final_mask[index][indices] = 1
+        final_mask[:, index] = final_mask[index, :]
+
+    return matrix * final_mask
 
 
 class IMDbDataset(Dataset):
@@ -78,10 +103,10 @@ class IMDbDataset(Dataset):
         self.num_items, self.num_users, self.num_item_features = 3848, 6040, 31
 
         # Connections between items with a weight less than this threshold are ignored
-        self.item_interactions_diff_threshold = 0
+        self.item_interactions_diff_threshold = config.getfloat('threshold', 'edge_weight')
 
         # The maximum number of connections allowed for each item
-        self.max_item_degree_threshold = 120
+        self.max_item_degree_threshold = config.getint('threshold', 'item_degree')
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
@@ -105,10 +130,14 @@ class IMDbDataset(Dataset):
         self.raw_file_content()
 
         """ item-item dataset """
-        spars_item_interaction_diff = spars_matrix(self.item_interactions_diff, self.max_item_degree_threshold)
+        # part 1: trim edges below the weight threshold
+        # self.item_interactions_diff[self.item_interactions_diff < self.item_interactions_diff_threshold] = 0
 
-        ii_edge_index = np.asarray(np.where(spars_item_interaction_diff > self.item_interactions_diff_threshold))
-        ii_edge_attr = spars_item_interaction_diff[ii_edge_index[0], ii_edge_index[1]]
+        # part 2: make the matrix sparse
+        self.item_interactions_diff = matrix_sparsify1(self.item_interactions_diff, self.max_item_degree_threshold)
+
+        ii_edge_index = np.asarray(np.nonzero(self.item_interactions_diff))
+        ii_edge_attr = self.item_interactions_diff[ii_edge_index[0], ii_edge_index[1]]
 
         data_ii = Data(
             x=torch.tensor(self.item_features, dtype=torch.float),  # node features
@@ -167,9 +196,6 @@ class IMDbDataset(Dataset):
         # data_ui_test = Data(x=[9888, 31], edge_index=[2, 199374], edge_attr=[199374])
         # data_ui_validation = Data(x=[9888, 31], edge_index=[2, 199374], edge_attr=[199374])
 
-        # Delete matrices to reduce memory usage, as we don't need them anymore
-        del self.user_names, self.user_features, self.item_names, self.item_features, self.item_interactions_diff, self.ui_weights
-
     def raw_file_content(self):
         """ Fetch data and set our matrices """
         with open(self.raw_paths[0], 'r', newline='') as csv_file:
@@ -198,7 +224,7 @@ class IMDbDataset(Dataset):
         self.item_interactions_diff = np.memmap(
             self.raw_paths[4],
             dtype=np.float32,
-            mode='r',
+            mode='r+',
             shape=(self.num_items, self.num_items)
         )
 
