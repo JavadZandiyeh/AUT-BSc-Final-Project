@@ -167,7 +167,7 @@ class IMDbDataset(Dataset):
             edge_index=torch.tensor(ii_edge_index, dtype=torch.long),  # edges between items
             edge_attr=torch.tensor(ii_edge_attr, dtype=torch.float)  # weights related to edges
         )
-        # Example: data_ii = Data(x=[3848, 31], edge_index=[2, 4464140], edge_attr=[4464140])
+        # Example: data_ii = Data(x=[3848, 31], edge_index=[2, 501336], edge_attr=[501336])
 
         torch.save(data_ii, f'{self.processed_dir}/data_ii.pt')
 
