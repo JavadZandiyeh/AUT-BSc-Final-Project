@@ -53,6 +53,7 @@ def train_test_validation_division(matrix):
 def matrix_sparsify(matrix, degree_cutoff):
     mask = np.where(matrix != 0, 1, 0)
 
+    # Reduce the degree of high-degree nodes
     while True:
         degrees = np.sum(mask, axis=0)
         index = int(np.argmax(degrees))
@@ -62,8 +63,18 @@ def matrix_sparsify(matrix, degree_cutoff):
 
         indices = np.argsort(-matrix[index] * mask[index])[:degree_cutoff]
 
-        mask[index][indices] = 1
-        mask[:, index] = mask[index, :]
+        updated_mask_row = np.zeros_like(mask[index])
+        updated_mask_row[indices] = 1
+
+        mask[index, :] = updated_mask_row
+        mask[:, index] = updated_mask_row
+
+    # Connect isolate nodes to others
+    isolates = np.where(np.all(mask == 0, axis=1))[0]
+    for i in isolates:
+        indices = np.argsort(-matrix[i])[:len(isolates)]
+        mask[i][indices] = 1
+        mask[:, i] = mask[i, :]
 
     return matrix * mask
 
@@ -93,6 +104,18 @@ def matrix_sparsify1(matrix, degree_cutoff):
     return matrix * final_mask
 
 
+def matrix_sparsify2(matrix, degree_cutoff):
+    mask = np.zeros_like(matrix, dtype=np.int64)
+
+    for i in range(matrix.shape[0]):
+        indices = np.argsort(-matrix[i])[:degree_cutoff]
+
+        mask[i][indices] = 1
+        mask[:, i] = mask[i, :]
+
+    return matrix * mask
+
+
 class IMDbDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         # Initialize matrices
@@ -103,10 +126,10 @@ class IMDbDataset(Dataset):
         self.num_items, self.num_users, self.num_item_features = 3848, 6040, 31
 
         # Connections between items with a weight less than this threshold are ignored
-        self.item_interactions_diff_threshold = config.getfloat('threshold', 'edge_weight')
+        self.item_interactions_diff_threshold = config.getfloat('sparsify', 'edge_weight')
 
         # The maximum number of connections allowed for each item
-        self.max_item_degree_threshold = config.getint('threshold', 'item_degree')
+        self.max_item_degree_threshold = config.getint('sparsify', 'item_degree')
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
@@ -134,10 +157,10 @@ class IMDbDataset(Dataset):
         # self.item_interactions_diff[self.item_interactions_diff < self.item_interactions_diff_threshold] = 0
 
         # part 2: make the matrix sparse
-        self.item_interactions_diff = matrix_sparsify1(self.item_interactions_diff, self.max_item_degree_threshold)
+        sparse_item_interaction_diff = matrix_sparsify(self.item_interactions_diff, self.max_item_degree_threshold)
 
-        ii_edge_index = np.asarray(np.nonzero(self.item_interactions_diff))
-        ii_edge_attr = self.item_interactions_diff[ii_edge_index[0], ii_edge_index[1]]
+        ii_edge_index = np.asarray(np.nonzero(sparse_item_interaction_diff))
+        ii_edge_attr = sparse_item_interaction_diff[ii_edge_index[0], ii_edge_index[1]]
 
         data_ii = Data(
             x=torch.tensor(self.item_features, dtype=torch.float),  # node features
@@ -224,7 +247,7 @@ class IMDbDataset(Dataset):
         self.item_interactions_diff = np.memmap(
             self.raw_paths[4],
             dtype=np.float32,
-            mode='r+',
+            mode='r',
             shape=(self.num_items, self.num_items)
         )
 
