@@ -23,7 +23,7 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         edge_index, edge_att = pyg.utils.add_self_loops(edge_index, edge_attr=edge_att, fill_value=1.0)
 
         # Perform softmax on the edge attentions
-        edge_att = pyg.utils.softmax(src=edge_att, index=edge_index[1])
+        # edge_att = pyg.utils.softmax(src=edge_att, index=edge_index[1])
 
         # Linearly transform node feature matrix
         x = self.linear(x)

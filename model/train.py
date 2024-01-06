@@ -4,6 +4,8 @@ import os
 import torch
 
 import model_builder
+import networkx as nx
+import torch_geometric as pyg
 
 """ Basic setups """
 # Read configs
@@ -28,6 +30,14 @@ os.environ['TORCH'] = torch.__version__
 if __name__ == '__main__':
     num_nodes, num_features = data_ii.x.size()
 
+    # G = pyg.utils.to_networkx(data_ii, to_undirected=True)
+    # connected_components = list(nx.connected_components(G))
+    # for i, component in enumerate(connected_components, 1):
+    #     print(len(component))
+    #     subgraph = G.subgraph(component)
+    #     diameter = nx.diameter(subgraph)
+    #     print(f"Diameter of component {i}: {diameter}")
+
     model = model_builder.ItemItemModel(
         in_channels=num_features,
         hidden_channels=num_features,
@@ -35,3 +45,12 @@ if __name__ == '__main__':
     )
 
     out = model(data_ii.x, data_ii.edge_index, data_ii.edge_attr)
+
+    # sample_tensor_normalized = torch.nn.functional.normalize(out, p=2, dim=1)
+    # cosine_similarities = torch.matmul(sample_tensor_normalized, sample_tensor_normalized.t())
+    # print(torch.min(cosine_similarities), torch.mean(cosine_similarities), torch.max(cosine_similarities))
+
+    # flat_data = cosine_similarities.detach().numpy().flatten()
+    # import matplotlib.pyplot as plt
+    # plt.hist(flat_data, bins=30, color='blue', alpha=0.7)
+    # plt.show()
