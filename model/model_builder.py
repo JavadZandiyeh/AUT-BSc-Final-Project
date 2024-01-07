@@ -1,9 +1,5 @@
-from typing import Optional
-
 import torch
 import torch_geometric as pyg
-from torch import Tensor
-from torch_geometric.typing import torch_scatter
 import utils
 
 
@@ -66,14 +62,27 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         return aggr_out + x
 
 
-class ItemItemModel(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
+class BigraphModel(torch.nn.Module):
+    def __init__(self, channels_ii: list, channels_ui: list):
         super().__init__()
-        self.cgat1 = CustomizedGAT(in_channels, hidden_channels)
-        self.cgat2 = CustomizedGAT(hidden_channels, out_channels)
+        self.cgat1_ii = CustomizedGAT(channels_ii[0], channels_ii[1])
+        self.cgat2_ii = CustomizedGAT(channels_ii[1], channels_ii[2])
 
-    def forward(self, x, edge_index, edge_attr):
-        h1 = self.cgat1(x, edge_index, edge_attr)
-        h2 = self.cgat2(h1, edge_index, edge_attr)
+        self.cgat1_ui = CustomizedGAT(channels_ui[0], channels_ui[1])
+        self.cgat2_ui = CustomizedGAT(channels_ui[1], channels_ui[2])
 
-        return h2
+    def forward(self, x_ii, edge_index_ii, edge_attr_ii, x_ui, edge_index_ui, edge_attr_ui):
+        h1_ii = self.cgat1_ii(x_ii, edge_index_ii, edge_attr_ii)
+        h2_ii = self.cgat2_ii(h1_ii, edge_index_ii, edge_attr_ii)
+
+        x_ui_cloned = x_ui.clone()
+        x_ui_cloned[:h2_ii.size(0)] = h2_ii
+
+        h1_ui = self.cgat1_ui(x_ui_cloned, edge_index_ui, edge_attr_ui)
+        h2_ui = self.cgat1_ui(h1_ui, edge_index_ui, edge_attr_ui)
+
+        h2_ui_j = torch.index_select(h2_ui, 0, edge_index_ui[0])
+        h2_ui_i = torch.index_select(h2_ui, 0, edge_index_ui[1])
+        edge_att_ui = torch.nn.functional.cosine_similarity(h2_ui_i, h2_ui_j, dim=1)
+
+        return edge_att_ui
