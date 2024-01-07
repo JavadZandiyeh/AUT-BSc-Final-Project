@@ -1,6 +1,9 @@
+from typing import Optional
+
 import torch
 import torch_geometric as pyg
-
+from torch import Tensor
+from torch_geometric.typing import torch_scatter
 import utils
 
 
@@ -16,11 +19,14 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         self.bias.data.zero_()
 
     def forward(self, x, edge_index, edge_attr):
+        """
+        :param x: (num_nodes * in_channels)
+        :param edge_index: (2 * num_edges)
+        :param edge_attr: (num_edges)
+        :return: (num_nodes * out_channels)
+        """
         # Compute edge attentions
         _, edge_att = utils.get_edge_att(x, edge_index, edge_attr)
-
-        # Add self-loops and set edge_att for self-loops to 1.0
-        edge_index, edge_att = pyg.utils.add_self_loops(edge_index, edge_attr=edge_att, fill_value=1.0)
 
         # Perform softmax on the edge attentions
         # edge_att = pyg.utils.softmax(src=edge_att, index=edge_index[1])
@@ -37,7 +43,27 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         return out
 
     def message(self, x_j, edge_att):
+        """
+        :param x_j: (num_edges * in_channels)
+        :param edge_att: (num_edges)
+        :return: (num_edges * in_channels)
+        """
         return edge_att.view(-1, 1) * x_j
+
+    # def aggregate(self, msg_out, edge_index):
+    #     """
+    #     :param msg_out: (num_edges * in_channels)
+    #     :param edge_index: (2 * num_edges)
+    #     :return: (num_nodes * in_channels)
+    #     """
+    #     return None
+
+    def update(self, aggr_out, x):
+        """
+        :param aggr_out: (num_nodes * in_channels)
+        :return: (num_nodes * out_channels)
+        """
+        return aggr_out + x
 
 
 class ItemItemModel(torch.nn.Module):
