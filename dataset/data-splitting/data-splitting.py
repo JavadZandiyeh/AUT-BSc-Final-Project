@@ -131,11 +131,8 @@ class IMDbDataset(Dataset):
         # self.item_names, self.item_interactions, self.ii_weights, self.user_names = None, None, None, None
         self.user_features, self.item_features, self.item_interactions_diff, self.iu_weights = None, None, None, None
 
-        # Connections between items with a weight less than this threshold are ignored
-        self.item_interactions_diff_threshold = config.getfloat('sparsify', 'edge_weight')
-
         # The maximum number of connections allowed for each item
-        self.max_item_degree_threshold = config.getint('sparsify', 'item_degree')
+        self.max_item_degree_threshold = config.getint('main', 'item_degree')
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
