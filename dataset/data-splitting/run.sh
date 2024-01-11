@@ -1,1 +1,0 @@
-python3 data-splitting.py 'imdb-1m'
