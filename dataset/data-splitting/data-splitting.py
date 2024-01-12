@@ -5,7 +5,7 @@ from enum import Enum
 
 import numpy as np
 import torch
-from torch_geometric.data import Dataset, Data
+import torch_geometric as pyg
 
 
 def train_val_test_mask(matrix):
@@ -118,7 +118,7 @@ class DatasetType(Enum):
     imdb_25m = 'imdb-25m'
 
 
-class IMDbDataset(Dataset):
+class IMDbDataset(pyg.data.Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         # Dimension of matrices (because the .dat file doesn't store dimensions of matrices)
         self.num_users = 6040
@@ -205,7 +205,7 @@ class IMDbDataset(Dataset):
         edge_mask_test = np.where((mask_test_ii + mask_test_uiu) * adj != 0, True, False)
         edge_mask_test = edge_mask_test[edge_index[0], edge_index[1]]
 
-        data = Data(
+        data = pyg.data.Data(
             x=torch.tensor(x, dtype=torch.float),
             y=torch.tensor(edge_y, dtype=torch.float),
             edge_index=torch.tensor(edge_index, dtype=torch.long),
