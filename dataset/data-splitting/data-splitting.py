@@ -184,6 +184,12 @@ class IMDbDataset(pyg.data.Dataset):
         mask_train_uiu, mask_val_uiu, mask_test_uiu = train_val_test_mask(mask_uiu * adj)
 
         """ save data in the pyg dataset format"""
+        node_mask_user = torch.cat((
+            torch.ones(self.num_users, dtype=torch.bool),
+            torch.zeros(self.num_items, dtype=torch.bool)
+        ))
+        node_mask_item = ~node_mask_user
+
         edge_index = np.asarray(np.nonzero(adj))
 
         edge_y = y[edge_index[0], edge_index[1]]
@@ -207,6 +213,8 @@ class IMDbDataset(pyg.data.Dataset):
 
         data = pyg.data.Data(
             x=torch.tensor(x, dtype=torch.float),
+            node_mask_item=node_mask_item,
+            node_mask_user=node_mask_user,
             y=torch.tensor(edge_y, dtype=torch.float),
             edge_index=torch.tensor(edge_index, dtype=torch.long),
             edge_attr=torch.tensor(edge_attr, dtype=torch.float),
@@ -214,7 +222,9 @@ class IMDbDataset(pyg.data.Dataset):
             edge_mask_ii=torch.tensor(edge_mask_ii, dtype=torch.bool),
             edge_mask_train=torch.tensor(edge_mask_train, dtype=torch.bool),
             edge_mask_val=torch.tensor(edge_mask_val, dtype=torch.bool),
-            edge_mask_test=torch.tensor(edge_mask_test, dtype=torch.bool)
+            edge_mask_test=torch.tensor(edge_mask_test, dtype=torch.bool),
+            num_items=self.num_items,
+            num_users=self.num_users
         )
 
         torch.save(data, f'{self.processed_dir}/data.pt')

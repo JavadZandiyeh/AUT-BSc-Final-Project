@@ -2,18 +2,21 @@ import tqdm
 import torch
 
 
-def train_step(model, data_ii, data_ui, optimizer, loss_fn, device):
+def train_step(model, data, optimizer, loss_fn):
     train_loss = 0
 
     model.train()
 
-    out = model(
-        data_ii.x, data_ii.edge_index, data_ii.edge_attr,
-        data_ui.x, data_ui.edge_index,
-        torch.ones_like(data_ui.edge_attr)
+    y_pred = model(
+        x=data.x,
+        edge_index=data.edge_index,
+        edge_attr=data.edge_attr,
+        edge_mask_ii=data.edge_mask_ii,
+        edge_mask_uiu=data.edge_mask_uiu,
+        node_mask_item=data.node_mask_item
     )
 
-    loss = loss_fn(out, data_ui.edge_attr)  # (predicted, actual)
+    loss = loss_fn(y_pred, data.y[data.edge_mask_uiu])  # (predicted, actual)
 
     train_loss += loss.item()
 
@@ -23,39 +26,27 @@ def train_step(model, data_ii, data_ui, optimizer, loss_fn, device):
 
     optimizer.step()
 
-    train_loss /= data_ui.edge_index.size(1)
+    train_loss /= torch.count_nonzero(data.edge_mask_ii)
 
     return train_loss
 
 
-def validation_step(model, data_ii, data_ui, optimizer, loss_fn, device):
-    return 1, 2
+def validation_step():
+    pass
 
 
-def test_step(model, data_ii, data_ui, optimizer, loss_fn, device):
-    return 1, 2
+def test_step():
+    pass
 
 
-def train(model, data_ii, data_ui_train, data_ui_test, data_ui_validation, optimizer, loss_fn, epochs, device):
+def train(model, data, optimizer, loss_fn, epochs):
 
     for epoch in tqdm.tqdm(range(epochs)):
         train_loss = train_step(
             model=model,
-            data_ii=data_ii,
-            data_ui=data_ui_train,
+            data=data,
             optimizer=optimizer,
             loss_fn=loss_fn,
-            device=device
         )
 
-        # test_loss, test_acc = test_step(
-        #     model=model,
-        #     data_ii=data_ii,
-        #     data_ui=data_ui_test,
-        #     optimizer=optimizer,
-        #     loss_fn=loss_fn,
-        #     device=device
-        # )
-
-        # if epoch % 10 == 0:
         print(f'epoch: {epoch}, train_loss: {train_loss}')

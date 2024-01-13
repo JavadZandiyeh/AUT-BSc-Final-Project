@@ -5,84 +5,107 @@ import utils
 
 class CustomizedGAT(pyg.nn.MessagePassing):
     def __init__(self, in_channels, out_channels):
-        super().__init__(aggr='add')  # "Add" aggregation
-        self.linear = torch.nn.Linear(in_channels, out_channels, bias=False)
+        super().__init__(aggr='mean')
+        self.lin = torch.nn.Linear(in_channels, out_channels, bias=False)
         self.bias = torch.nn.Parameter(torch.empty(out_channels))
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.linear.reset_parameters()
+        self.lin.reset_parameters()
         self.bias.data.zero_()
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, node_mask=None):
         """
         :param x: (num_nodes * in_channels)
         :param edge_index: (2 * num_edges)
         :param edge_attr: (num_edges)
+        :param node_mask: (num_nodes)
         :return: (num_nodes * out_channels)
         """
-        # Compute edge attentions
-        _, edge_att = utils.get_edge_att(x, edge_index, edge_attr)
+        forward_out = x.clone()
 
-        # Perform softmax on the edge attentions
-        # edge_att = pyg.utils.softmax(src=edge_att, index=edge_index[1])
+        if node_mask is None:
+            node_mask = torch.ones(forward_out.shape[0], dtype=torch.bool)
 
-        # Linearly transform node feature matrix
-        x = self.linear(x)
+        forward_out[node_mask] = self.lin(forward_out[node_mask])
 
-        # Propagate messages
-        out = self.propagate(edge_index=edge_index, x=x, edge_att=edge_att)
+        # edge_attr = pyg.utils.softmax(src=edge_attr, index=edge_index[1])
 
-        out += self.bias
-        out = torch.sigmoid(out)
+        forward_out = self.propagate(x=forward_out, edge_index=edge_index, edge_attr=edge_attr, node_mask=node_mask)
 
-        return out
+        forward_out[node_mask] += self.bias
 
-    def message(self, x_j, edge_att):
+        forward_out[node_mask] = torch.sigmoid(forward_out[node_mask])
+
+        return forward_out
+
+    def message(self, x_j, edge_attr):
         """
         :param x_j: (num_edges * in_channels)
-        :param edge_att: (num_edges)
+        :param edge_attr: (num_edges)
         :return: (num_edges * in_channels)
         """
-        return edge_att.view(-1, 1) * x_j
+        msg_out = edge_attr.view(-1, 1) * x_j
 
-    # def aggregate(self, msg_out, edge_index):
-    #     """
-    #     :param msg_out: (num_edges * in_channels)
-    #     :param edge_index: (2 * num_edges)
-    #     :return: (num_nodes * in_channels)
-    #     """
-    #     return None
+        return msg_out
+
+    def aggregate(self, msg_out, x, edge_index, node_mask):
+        """
+        :param msg_out: (num_edges * in_channels)
+        :param x: (num_nodes * in_channels)
+        :param edge_index: (2 * num_edges)
+        :param node_mask: (num_nodes)
+        :return: (num_nodes * in_channels)
+        """
+        aggr_out = torch.zeros_like(x)
+
+        for i in torch.nonzero(node_mask).squeeze():
+            indices = torch.where(edge_index[1] == i)[0]
+            msgs = msg_out[indices]
+
+            aggr_out[i] = torch.mean(msgs, dim=0)
+
+        return aggr_out
 
     def update(self, aggr_out, x):
         """
         :param aggr_out: (num_nodes * in_channels)
+        :param x: (num_nodes * in_channels)
         :return: (num_nodes * out_channels)
         """
-        return aggr_out + x
+        update_out = aggr_out + x
+
+        return update_out
 
 
 class BigraphModel(torch.nn.Module):
-    def __init__(self, channels_ii: list, channels_ui: list):
+    def __init__(self, channels_ii: list, channels_uiu: list):
         super().__init__()
         self.cgat1_ii = CustomizedGAT(channels_ii[0], channels_ii[1])
         self.cgat2_ii = CustomizedGAT(channels_ii[1], channels_ii[2])
 
-        self.cgat1_ui = CustomizedGAT(channels_ui[0], channels_ui[1])
-        self.cgat2_ui = CustomizedGAT(channels_ui[1], channels_ui[2])
+        self.cgat1_uiu = CustomizedGAT(channels_uiu[0], channels_uiu[1])
+        self.cgat2_uiu = CustomizedGAT(channels_uiu[1], channels_uiu[2])
 
-    def forward(self, x_ii, edge_index_ii, edge_attr_ii, x_ui, edge_index_ui, edge_attr_ui):
-        h1_ii = self.cgat1_ii(x_ii, edge_index_ii, edge_attr_ii)
-        h2_ii = self.cgat2_ii(h1_ii, edge_index_ii, edge_attr_ii)
+    def forward(self, x, edge_index, edge_attr, edge_mask_ii, edge_mask_uiu, node_mask_item):
+        """ item-item graph """
+        edge_index_ii, edge_attr_ii = edge_index[:, edge_mask_ii], edge_attr[edge_mask_ii]
 
-        x_ui_cloned = x_ui.clone()
-        x_ui_cloned[:h2_ii.size(0)] = h2_ii
+        edge_attr1_ii = utils.get_edge_att(x, edge_index_ii, edge_attr_ii)
+        x1_ii = self.cgat1_ii(x, edge_index_ii, edge_attr1_ii, node_mask_item)
 
-        h1_ui = self.cgat1_ui(x_ui_cloned, edge_index_ui, edge_attr_ui)
-        h2_ui = self.cgat1_ui(h1_ui, edge_index_ui, edge_attr_ui)
+        edge_attr2_ii = utils.get_edge_att(x1_ii, edge_index_ii, edge_attr_ii)
+        x2_ii = self.cgat2_ii(x1_ii, edge_index_ii, edge_attr2_ii, node_mask_item)
 
-        h2_ui_j = torch.index_select(h2_ui, 0, edge_index_ui[0])
-        h2_ui_i = torch.index_select(h2_ui, 0, edge_index_ui[1])
-        edge_att_ui = torch.nn.functional.cosine_similarity(h2_ui_i, h2_ui_j, dim=1)
+        """ user-item graph """
+        edge_index_uiu, edge_attr_uiu = edge_index[:, edge_mask_uiu], edge_attr[edge_mask_uiu]
 
-        return edge_att_ui
+        x1_uiu = self.cgat1_uiu(x2_ii, edge_index_uiu, edge_attr_uiu)
+        x2_uiu = self.cgat1_uiu(x1_uiu, edge_index_uiu, edge_attr_uiu)
+
+        x2_uiu_j = torch.index_select(x2_uiu, 0, edge_index_uiu[0])
+        x2_uiu_i = torch.index_select(x2_uiu, 0, edge_index_uiu[1])
+
+        edge_sim_uiu = torch.nn.functional.cosine_similarity(x2_uiu_j, x2_uiu_i, dim=1)
+
+        return edge_sim_uiu
