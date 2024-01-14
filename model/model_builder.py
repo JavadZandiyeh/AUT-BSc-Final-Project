@@ -106,6 +106,7 @@ class BigraphModel(torch.nn.Module):
         x2_uiu_j = torch.index_select(x2_uiu, 0, edge_index_uiu[0])
         x2_uiu_i = torch.index_select(x2_uiu, 0, edge_index_uiu[1])
 
-        edge_sim_uiu = torch.nn.functional.cosine_similarity(x2_uiu_j, x2_uiu_i, dim=1)
+        edge_y_pred = torch.zeros_like(edge_attr)
+        edge_y_pred[edge_mask_uiu] = torch.nn.functional.cosine_similarity(x2_uiu_j, x2_uiu_i, dim=1)
 
-        return edge_sim_uiu
+        return edge_y_pred
