@@ -180,41 +180,39 @@ class IMDbDataset(pyg.data.Dataset):
         mask_uiu[self.num_users:, :self.num_users] = 1
 
         """ mask_train, mask_val, mask_test: [(num_users + num_items), (num_users, num_items)] """
-        mask_train_ii, mask_val_ii, mask_test_ii = train_val_test_mask(mask_ii * adj)
         mask_train_uiu, mask_val_uiu, mask_test_uiu = train_val_test_mask(mask_uiu * adj)
 
         """ save data in the pyg dataset format"""
+        edge_index = np.asarray(np.nonzero(adj))
+
+        def get_pyg_matrix(matrix):
+            return matrix[edge_index[0], edge_index[1]]
+
+        def get_pyg_edge_mask(mask):
+            edge_mask = np.where(mask * adj != 0, True, False)
+            return get_pyg_matrix(edge_mask)
+
         node_mask_user = torch.cat((
             torch.ones(self.num_users, dtype=torch.bool),
             torch.zeros(self.num_items, dtype=torch.bool)
         ))
         node_mask_item = ~node_mask_user
 
-        edge_index = np.asarray(np.nonzero(adj))
+        edge_y = get_pyg_matrix(y)
 
-        edge_y = y[edge_index[0], edge_index[1]]
+        edge_attr = get_pyg_matrix(adj)
 
-        edge_attr = adj[edge_index[0], edge_index[1]]
+        edge_mask_uiu = get_pyg_edge_mask(mask_uiu)
+        edge_mask_ii = get_pyg_edge_mask(mask_ii)
 
-        edge_mask_ii = np.where(mask_ii * adj != 0, True, False)
-        edge_mask_ii = edge_mask_ii[edge_index[0], edge_index[1]]
-
-        edge_mask_uiu = np.where(mask_uiu * adj != 0, True, False)
-        edge_mask_uiu = edge_mask_uiu[edge_index[0], edge_index[1]]
-
-        edge_mask_train = np.where((mask_train_ii + mask_train_uiu) * adj != 0, True, False)
-        edge_mask_train = edge_mask_train[edge_index[0], edge_index[1]]
-
-        edge_mask_val = np.where((mask_val_ii + mask_val_uiu) * adj != 0, True, False)
-        edge_mask_val = edge_mask_val[edge_index[0], edge_index[1]]
-
-        edge_mask_test = np.where((mask_test_ii + mask_test_uiu) * adj != 0, True, False)
-        edge_mask_test = edge_mask_test[edge_index[0], edge_index[1]]
+        edge_mask_train = get_pyg_edge_mask(mask_train_uiu)
+        edge_mask_val = get_pyg_edge_mask(mask_val_uiu)
+        edge_mask_test = get_pyg_edge_mask(mask_test_uiu)
 
         data = pyg.data.Data(
             x=torch.tensor(x, dtype=torch.float),
-            node_mask_item=node_mask_item,
             node_mask_user=node_mask_user,
+            node_mask_item=node_mask_item,
             y=torch.tensor(edge_y, dtype=torch.float),
             edge_index=torch.tensor(edge_index, dtype=torch.long),
             edge_attr=torch.tensor(edge_attr, dtype=torch.float),
