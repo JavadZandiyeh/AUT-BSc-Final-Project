@@ -16,7 +16,7 @@ def train_step(model, data, optimizer, loss_fn):
         node_mask_item=data.node_mask_item
     )
 
-    loss = loss_fn(y_pred, data.y[data.edge_mask_uiu])  # (predicted, actual)
+    loss = loss_fn(y_pred[data.edge_mask_test], data.y[data.edge_mask_test])  # (predicted, actual)
 
     train_loss += loss.item()
 
