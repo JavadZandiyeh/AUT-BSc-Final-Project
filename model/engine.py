@@ -1,5 +1,6 @@
 import tqdm
 import torch
+import datetime
 
 
 def train_step(model, data, optimizer, loss_fn):
@@ -16,7 +17,7 @@ def train_step(model, data, optimizer, loss_fn):
         node_mask_item=data.node_mask_item
     )
 
-    loss = loss_fn(y_pred[data.edge_mask_test], data.y[data.edge_mask_test])  # (predicted, actual)
+    loss = loss_fn(y_pred[data.edge_mask_train], data.y[data.edge_mask_train])  # (predicted, actual)
 
     train_loss += loss.item()
 
@@ -42,11 +43,13 @@ def test_step():
 def train(model, data, optimizer, loss_fn, epochs):
 
     for epoch in tqdm.tqdm(range(epochs)):
+        print(datetime.datetime.now())
+
         train_loss = train_step(
             model=model,
             data=data,
             optimizer=optimizer,
-            loss_fn=loss_fn,
+            loss_fn=loss_fn
         )
 
         print(f'epoch: {epoch}, train_loss: {train_loss}')
