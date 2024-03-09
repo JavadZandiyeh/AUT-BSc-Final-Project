@@ -27,13 +27,19 @@ data = data.to(device)
 if __name__ == '__main__':
     channel = data.num_node_features
 
-    model = model_builder.BigraphModel(
-        channels_ii=[channel, channel, channel],
-        channels_uiu=[channel, channel, channel]
-    ).to(device)
+    # case 0
+    # model = model_builder.BigraphModel(
+    #     channels_ii=[channel, channel, channel],
+    #     channels_uiu=[channel, channel, channel]
+    # )
 
+    # case 1
+    model = model_builder.Model1(
+        channels=[channel, channel, channel]
+    )
+
+    model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     loss_fn = torch.nn.MSELoss().to(device)
 
     engine.train(

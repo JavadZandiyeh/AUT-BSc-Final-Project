@@ -31,3 +31,13 @@ def get_device():
     device = torch.device(device)
 
     return device
+
+
+def get_edge_y_pred(h, edge_index, edge_attr, edge_mask):
+    h_j = torch.index_select(h, 0, edge_index[0])
+    h_i = torch.index_select(h, 0, edge_index[1])
+
+    edge_y_pred = torch.zeros_like(edge_attr)
+    edge_y_pred[edge_mask] = torch.nn.functional.cosine_similarity(h_j, h_i, dim=1)
+
+    return edge_y_pred
