@@ -34,7 +34,7 @@ if __name__ == '__main__':
     # )
 
     # case 1
-    model = model_builder.Model1(
+    model = model_builder.GATv2Conv(
         channels=[channel, channel, channel]
     )
 

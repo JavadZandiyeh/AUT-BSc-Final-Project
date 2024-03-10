@@ -112,7 +112,7 @@ class BigraphModel(torch.nn.Module):
         return edge_y_pred
 
 
-class Model1(torch.nn.Module):
+class GATv2Conv(torch.nn.Module):
     def __init__(self, channels: list):
         super().__init__()
 
@@ -130,10 +130,11 @@ class Model1(torch.nn.Module):
                 )
             )
 
-    def forward(self, data):
+    def forward(self, data, h_dist_type: utils.DistType = None):
         edge_index_uiu, edge_attr_uiu = data.edge_index[:, data.edge_mask_uiu], data.edge_attr[data.edge_mask_uiu]
 
-        h = data.x
+        h = utils.get_tensor_distribution(data.x.shape, h_dist_type) if h_dist_type else data.x
+
         for layer in self.layers:
             h = layer(h, edge_index_uiu, edge_attr_uiu)
 
