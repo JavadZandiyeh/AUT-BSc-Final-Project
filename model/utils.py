@@ -183,36 +183,109 @@ def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for 
     return edge_index_sampled[:2, :], edge_index_sampled[2]  # edge_index, indices
 
 
-def edge_sampling(data, rate=0.7, neg=True, pos_replacement=False):
-    data_cloned = data.clone()
+def train_val_test(edge_index):  # for undirected graphs only
+    num_edges = round(edge_index.size(1) / 2)
+
+    num_train = round(num_edges * 0.8)
+    num_val = round((num_edges - num_train) * 0.5)
+    num_test = num_edges - num_train - num_val
+
+    mask = torch.zeros_like(edge_index[0])
+
+    _, val_indices = pos_edge_sampling(edge_index, num_val)
+    mask[val_indices] = 1
+
+    train_test_indices = torch.nonzero(mask == 0).T.squeeze()
+    _, test_indices = pos_edge_sampling(edge_index[:, train_test_indices], num_test)
+    test_indices = train_test_indices[test_indices]
+    mask[test_indices] = 2
+
+    train_mask = torch.zeros_like(edge_index[0])
+    train_mask[torch.nonzero(mask == 0).T.squeeze()] = True
+
+    val_mask = torch.zeros_like(edge_index[0])
+    val_mask[torch.nonzero(mask == 1).T.squeeze()] = True
+
+    test_mask = torch.zeros_like(edge_index[0])
+    test_mask[torch.nonzero(mask == 2).T.squeeze()] = True
+
+    return train_mask, val_mask, test_mask
+
+
+def edge_sampling(data, rate=0.7, pos=True, neg=True, pos_replacement=False):
+    cdata = data.clone()
 
     """ step 1: positive sampling mask """
-    num_edges_uiu = int(torch.count_nonzero(data.edge_mask_uiu) / 2)
-    num_samples_uiu = round(num_edges_uiu * rate)
+    if pos and (0 <= rate < 1):
+        num_edges_uiu = int(torch.count_nonzero(data.edge_mask_uiu) / 2)
+        num_samples_uiu = round(num_edges_uiu * rate)
 
-    # step 1: pos_edge_mask_uiu
-    edge_index_uiu = data.edge_index[:, data.edge_mask_uiu]
-    _, pos_indices_uiu = pos_edge_sampling(edge_index_uiu, num_samples_uiu, pos_replacement)
+        # step 1: pos_edge_mask_uiu
+        edge_index_uiu = data.edge_index[:, data.edge_mask_uiu]
+        _, pos_indices_uiu = pos_edge_sampling(edge_index_uiu, num_samples_uiu, pos_replacement)
 
-    all_indices_uiu = torch.nonzero(data.edge_mask_uiu).T.squeeze()
-    pos_indices_uiu = all_indices_uiu[pos_indices_uiu]
+        all_indices_uiu = torch.nonzero(data.edge_mask_uiu).T.squeeze()
+        pos_indices_uiu = all_indices_uiu[pos_indices_uiu]
 
-    pos_edge_mask_uiu = torch.zeros_like(data.edge_mask_uiu)
-    pos_edge_mask_uiu[pos_indices_uiu] = True
+        pos_edge_mask_uiu = torch.zeros_like(data.edge_mask_uiu)
+        pos_edge_mask_uiu[pos_indices_uiu] = True
 
-    # step 2: update the data
-    sampling_mask = torch.bitwise_or(data.edge_mask_ii, pos_edge_mask_uiu)
+        # step 2: update the data
+        sampling_mask = torch.bitwise_or(data.edge_mask_ii, pos_edge_mask_uiu)
 
-    data_cloned.edge_index = data.edge_index[:, sampling_mask]
-    data_cloned.edge_mask_uiu = data.edge_mask_uiu[sampling_mask]
-    data_cloned.edge_mask_ii = data.edge_mask_ii[sampling_mask]
-    data_cloned.edge_attr = data.edge_attr[sampling_mask]
-    data_cloned.y = data.y[sampling_mask]
-    data_cloned.edge_mask_train = data.edge_mask_train[sampling_mask]
-    data_cloned.edge_mask_test = data.edge_mask_test[sampling_mask]
-    data_cloned.edge_mask_val = data.edge_mask_val[sampling_mask]
+        cdata.edge_index = data.edge_index[:, sampling_mask]
+        cdata.edge_mask_uiu = data.edge_mask_uiu[sampling_mask]
+        cdata.edge_mask_ii = data.edge_mask_ii[sampling_mask]
+        cdata.edge_attr = data.edge_attr[sampling_mask]
+        cdata.y = data.y[sampling_mask]
+        cdata.edge_mask_train = data.edge_mask_train[sampling_mask]
+        cdata.edge_mask_val = data.edge_mask_val[sampling_mask]
+        cdata.edge_mask_test = data.edge_mask_test[sampling_mask]
 
     """ step 2: negative sampling """
-    if not neg:
-        return data_cloned
+    if neg:
+        edge_index_uiu = cdata.edge_index[:, cdata.edge_mask_uiu]
 
+        neg_edge_index_uiu = neg_edge_sampling(edge_index_uiu)
+        neg_edge_mask_uiu = torch.ones_like(neg_edge_index_uiu[0])
+        neg_edge_mask_ii = torch.zeros_like(neg_edge_index_uiu[0])
+        neg_edge_attr = torch.zeros_like(neg_edge_index_uiu[0])
+        neg_y = torch.zeros_like(neg_edge_index_uiu[0])
+        neg_edge_mask_train, neg_edge_mask_val, neg_edge_mask_test = train_val_test(neg_edge_index_uiu)
+
+        cdata_stacked = torch.vstack((
+            cdata.edge_index,
+            cdata.edge_mask_uiu,
+            cdata.edge_mask_ii,
+            cdata.edge_attr,
+            cdata.y,
+            cdata.edge_mask_train,
+            cdata.edge_mask_val,
+            cdata.edge_mask_test
+        ))
+
+        neg_cdata_stacked = torch.vstack((
+            neg_edge_index_uiu,
+            neg_edge_mask_uiu,
+            neg_edge_mask_ii,
+            neg_edge_attr,
+            neg_y,
+            neg_edge_mask_train,
+            neg_edge_mask_val,
+            neg_edge_mask_test
+        ))
+
+        stack = torch.hstack((cdata_stacked, neg_cdata_stacked))
+        stack_sorted_indices = lexsort_tensor((stack[1], stack[0]))
+        stack = stack[:, stack_sorted_indices]
+
+        cdata.edge_index = stack[:2, :]
+        cdata.edge_mask_uiu = stack[2, :].bool()
+        cdata.edge_mask_ii = stack[3, :].bool()
+        cdata.edge_attr = stack[4, :]
+        cdata.y = stack[5, :]
+        cdata.edge_mask_train = stack[6, :].bool()
+        cdata.edge_mask_val = stack[7, :].bool()
+        cdata.edge_mask_test = stack[8, :].bool()
+
+    return cdata
