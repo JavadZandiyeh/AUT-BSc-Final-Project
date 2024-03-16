@@ -112,7 +112,7 @@ class BigraphModel(torch.nn.Module):
         return edge_y_pred
 
 
-class GATv2Conv(torch.nn.Module):
+class GATv2ConvModel(torch.nn.Module):
     def __init__(self, channels: list):
         super().__init__()
 

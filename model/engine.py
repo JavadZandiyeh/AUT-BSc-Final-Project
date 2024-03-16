@@ -2,6 +2,7 @@ import tqdm
 import torch
 import datetime
 from enum import Enum
+import utils
 
 
 class EvalType(Enum):
@@ -49,21 +50,26 @@ def eval_step(model, data, loss_fn, eval_type):
     return eval_loss
 
 
-def train(model, data, optimizer, loss_fn, epochs):
+def start(model, data, optimizer, loss_fn, epochs):
 
     for epoch in tqdm.tqdm(range(epochs)):
         print(datetime.datetime.now())
 
+        """ sampling """
+        sampled_data = utils.edge_sampling(data)
+
+        """ train and validation """
         train_loss, val_loss = train_step(
             model=model,
-            data=data,
+            data=sampled_data,
             optimizer=optimizer,
             loss_fn=loss_fn
         )
 
+        """ test """
         test_loss = eval_step(
             model=model,
-            data=data,
+            data=sampled_data,
             loss_fn=loss_fn,
             eval_type=EvalType.TEST
         )

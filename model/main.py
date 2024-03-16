@@ -1,9 +1,10 @@
 import configparser
+import datetime
 import os
 
 import torch
 import engine
-import model_builder
+import models
 import utils
 
 """ Basic setups """
@@ -34,7 +35,7 @@ if __name__ == '__main__':
     # )
 
     # case 1
-    model = model_builder.GATv2Conv(
+    model = models.GATv2ConvModel(
         channels=[channel, channel, channel]
     )
 
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_fn = torch.nn.MSELoss().to(device)
 
-    engine.train(
+    engine.start(
         model=model,
         data=data,
         optimizer=optimizer,
