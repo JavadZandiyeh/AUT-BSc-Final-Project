@@ -23,9 +23,9 @@ def train_step(model, data, optimizer, loss_fn):
 
     optimizer.zero_grad()
 
-    loss.backward(retain_graph=True)    # it is needed to be changed
+    loss.backward(retain_graph=True)    # retain_graph might be changed
 
-    torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
+    # torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
 
     optimizer.step()
 

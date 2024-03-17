@@ -116,40 +116,38 @@ def lexsort_tensor(tup):
     return indices
 
 
-def neg_edge_sampling(edge_index, num_neg_samples=1):  # for undirected graphs only
+def neg_edge_sampling(edge_index, num_neg_samples=1, rate=1.0):  # for undirected graphs only
     bipartite, s1, s2 = is_bipartite(edge_index)  # s1 is the set of users, and s2 is the set of items
 
-    if not bipartite:
+    if bipartite:  # degree-based negative sampling for the bipartite graph
+        rate = max(0.0, rate)
+        adj_dict = get_adj_dict(edge_index)
+        neg_edge_index = list()
+
+        for node in s1:
+            neighbors = set(adj_dict.get(node))
+            non_neighbors = s2 - neighbors
+
+            num_neg_samples = min(round(len(neighbors) * rate), len(non_neighbors))
+
+            neg_neighbors = random.sample(non_neighbors, num_neg_samples)
+
+            for neg_neighbor in neg_neighbors:
+                neg_edge_index.append([node, neg_neighbor])
+                neg_edge_index.append([neg_neighbor, node])
+
+        neg_edge_index = torch.tensor(neg_edge_index).T.to(get_device())
+    else:
         edge_index_src = edge_index[:, edge_index[0, :] < edge_index[1, :]]
         num_nodes = len(torch.unique(edge_index_src))
 
         neg_edge_index1 = pyg.utils.negative_sampling(edge_index_src, num_nodes, num_neg_samples)
         neg_edge_index2 = torch.vstack((neg_edge_index1[1], neg_edge_index1[0]))
         neg_edge_index = torch.hstack((neg_edge_index1, neg_edge_index2))
-        neg_edge_index = neg_edge_index[:, lexsort_tensor((neg_edge_index[1], neg_edge_index[0]))]
 
-        return neg_edge_index
-
-    """ degree-based negative sampling for the bipartite graph """
-    adj_dict = get_adj_dict(edge_index)
-    neg_edge_index = list()
-
-    for node in s1:
-        neighbors = set(adj_dict.get(node))
-        non_neighbors = s2 - neighbors
-
-        num_neg_samples = min(len(neighbors), len(non_neighbors))
-
-        neg_neighbors = random.sample(non_neighbors, num_neg_samples)
-
-        for neg_neighbor in neg_neighbors:
-            neg_edge_index.append([node, neg_neighbor])
-            neg_edge_index.append([neg_neighbor, node])
-
-    neg_edge_index = torch.tensor(neg_edge_index).T.to(get_device())
     neg_edge_index = neg_edge_index[:, lexsort_tensor((neg_edge_index[1], neg_edge_index[0]))]
 
-    return neg_edge_index
+    return neg_edge_index.int()
 
 
 def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for undirected graphs only
@@ -180,7 +178,7 @@ def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for 
     # step 4: convert to tensor and change the device
     edge_index_sampled = torch.from_numpy(edge_index_sampled).to(get_device())
 
-    return edge_index_sampled[:2, :], edge_index_sampled[2]  # edge_index, indices
+    return edge_index_sampled[:2, :].int(), edge_index_sampled[2].int()  # edge_index, indices
 
 
 def train_val_test(edge_index):  # for undirected graphs only
@@ -201,24 +199,26 @@ def train_val_test(edge_index):  # for undirected graphs only
     mask[test_indices] = 2
 
     train_mask = torch.zeros_like(edge_index[0])
-    train_mask[torch.nonzero(mask == 0).T.squeeze()] = True
+    train_mask[torch.nonzero(mask == 0).T.squeeze()] = 1
 
     val_mask = torch.zeros_like(edge_index[0])
-    val_mask[torch.nonzero(mask == 1).T.squeeze()] = True
+    val_mask[torch.nonzero(mask == 1).T.squeeze()] = 1
 
     test_mask = torch.zeros_like(edge_index[0])
-    test_mask[torch.nonzero(mask == 2).T.squeeze()] = True
+    test_mask[torch.nonzero(mask == 2).T.squeeze()] = 1
 
-    return train_mask, val_mask, test_mask
+    return train_mask.bool(), val_mask.bool(), test_mask.bool()
 
 
-def edge_sampling(data, rate=0.7, pos=True, neg=True, pos_replacement=False):
+def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_replacement=False):
     cdata = data.clone()
 
     """ step 1: positive sampling mask """
-    if pos and (0 <= rate < 1):
+    pos_rate = max(0.0, pos_rate)
+
+    if pos and (pos_rate != 1 or pos_replacement):
         num_edges_uiu = int(torch.count_nonzero(data.edge_mask_uiu) / 2)
-        num_samples_uiu = round(num_edges_uiu * rate)
+        num_samples_uiu = round(num_edges_uiu * pos_rate)
 
         # step 1: pos_edge_mask_uiu
         edge_index_uiu = data.edge_index[:, data.edge_mask_uiu]
@@ -243,10 +243,12 @@ def edge_sampling(data, rate=0.7, pos=True, neg=True, pos_replacement=False):
         cdata.edge_mask_test = data.edge_mask_test[sampling_mask]
 
     """ step 2: negative sampling """
-    if neg:
+    neg_rate = max(0.0, neg_rate)
+
+    if neg and (neg_rate > 0.0):
         edge_index_uiu = cdata.edge_index[:, cdata.edge_mask_uiu]
 
-        neg_edge_index_uiu = neg_edge_sampling(edge_index_uiu)
+        neg_edge_index_uiu = neg_edge_sampling(edge_index_uiu, rate=neg_rate)
         neg_edge_mask_uiu = torch.ones_like(neg_edge_index_uiu[0])
         neg_edge_mask_ii = torch.zeros_like(neg_edge_index_uiu[0])
         neg_edge_attr = torch.zeros_like(neg_edge_index_uiu[0])
@@ -280,12 +282,22 @@ def edge_sampling(data, rate=0.7, pos=True, neg=True, pos_replacement=False):
         stack = stack[:, stack_sorted_indices]
 
         cdata.edge_index = stack[:2, :]
-        cdata.edge_mask_uiu = stack[2, :].bool()
-        cdata.edge_mask_ii = stack[3, :].bool()
+        cdata.edge_mask_uiu = stack[2, :]
+        cdata.edge_mask_ii = stack[3, :]
         cdata.edge_attr = stack[4, :]
         cdata.y = stack[5, :]
-        cdata.edge_mask_train = stack[6, :].bool()
-        cdata.edge_mask_val = stack[7, :].bool()
-        cdata.edge_mask_test = stack[8, :].bool()
+        cdata.edge_mask_train = stack[6, :]
+        cdata.edge_mask_val = stack[7, :]
+        cdata.edge_mask_test = stack[8, :]
+
+    # cast to standard types
+    cdata.edge_index = cdata.edge_index.long()
+    cdata.edge_mask_uiu = cdata.edge_mask_uiu.bool()
+    cdata.edge_mask_ii = cdata.edge_mask_ii.bool()
+    cdata.edge_attr = cdata.edge_attr.float()
+    cdata.y = cdata.y.float()
+    cdata.edge_mask_train = cdata.edge_mask_train.bool()
+    cdata.edge_mask_val = cdata.edge_mask_val.bool()
+    cdata.edge_mask_test = cdata.edge_mask_test.bool()
 
     return cdata
