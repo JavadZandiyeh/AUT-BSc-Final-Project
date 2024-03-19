@@ -1,4 +1,5 @@
 import os
+import pprint
 import random
 import datetime
 
@@ -351,7 +352,7 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
 
 
 def create_summary_writer(base_path, experiment_name, model_name, extra=None) -> SummaryWriter:
-    timestamp = datetime.datetime.now().strftime('%Y/%m/%d_%H-%M')
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d/%H-%M-%S')
 
     if extra:
         log_dir = os.path.join(base_path, timestamp, experiment_name, model_name, extra)
@@ -361,6 +362,19 @@ def create_summary_writer(base_path, experiment_name, model_name, extra=None) ->
     return SummaryWriter(log_dir=log_dir)
 
 
-def epoch_summary_write(writer: SummaryWriter, epoch, results):  # store run results of the epoch
-    for tag, result in results.items():
-        writer.add_scalars(main_tag=tag, tag_scalar_dict=result, global_step=epoch)
+def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results, test_results):
+    # results
+    results = dict.fromkeys(metrics := train_results.keys())
+    for metric in metrics:
+        results[metric] = {'train': 0, 'val': 0, 'test': 0}
+
+    for step, step_results in [('train', train_results), ('val', val_results), ('test', test_results)]:
+        for metric, value in step_results.items():
+            results[metric][step] = value
+
+    # terminal
+    pprint.pprint(results)
+
+    # writer
+    for metric, metric_results in results.items():
+        writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
