@@ -1,13 +1,16 @@
+import os
 import random
+import datetime
 
 import numpy as np
 import torch
 import torch_geometric as pyg
 import networkx as nx
-from enum import Enum
+import enum
+from torch.utils.tensorboard.writer import SummaryWriter
 
 
-class DistType(Enum):
+class DistType(enum.Enum):
     NORMAL = 'normal'
     UNIFORM = 'uniform'
     XAVIER_NORMAL = 'xavier_normal'
@@ -16,7 +19,7 @@ class DistType(Enum):
     KAIMING_UNIFORM = 'kaiming_uniform'
 
 
-class DeviceType(Enum):
+class DeviceType(enum.Enum):
     CPU = 'cpu'
     CUDA = 'cuda'
 
@@ -210,7 +213,7 @@ def train_val_test(edge_index):  # for undirected graphs only
     return train_mask.bool(), val_mask.bool(), test_mask.bool()
 
 
-def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_replacement=False):
+def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_replacement=False):  # for undirected graphs only
     cdata = data.clone()
 
     """ step 1: positive sampling mask """
@@ -301,3 +304,63 @@ def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_repl
     cdata.edge_mask_test = cdata.edge_mask_test.bool()
 
     return cdata
+
+
+def get_edge_match_indices(edge_index):  # for undirected graphs only
+    edge_index_cloned = edge_index.clone()
+
+    indices = torch.arange(0, edge_index_cloned.shape[1]).reshape(1, -1).to(get_device())
+    edge_index_cloned = torch.vstack((edge_index_cloned, indices))  # add indices of each column
+
+    src = edge_index_cloned[:, edge_index_cloned[0, :] < edge_index_cloned[1, :]]
+    src = src[:, lexsort_tensor((src[1], src[0]))]
+
+    trg = edge_index_cloned[:, edge_index_cloned[0, :] > edge_index_cloned[1, :]]
+    trg = trg[:, lexsort_tensor((trg[0], trg[1]))]
+
+    edge_match_indices = torch.vstack((src[2], trg[2]))
+
+    return edge_match_indices
+
+
+def mini_batching(edge_index, num_batches):  # for undirected graphs only
+    # edge_match_indices and shuffling
+
+    edge_match_indices = get_edge_match_indices(edge_index)
+    num_edges = edge_match_indices.size(1)
+    edge_match_indices = edge_match_indices[:, torch.randperm(num_edges)]  # shuffling
+
+    # batch sizes
+    quotient, remainder = num_edges // num_batches, num_edges % num_batches
+    batch_sizes = torch.ones((num_batches,), dtype=torch.int64).to(get_device())
+    batch_sizes *= quotient
+    batch_sizes[:remainder] += 1
+
+    # batches
+    batches, pos1 = list(), 0
+
+    for i in range(num_batches):
+        pos2 = pos1 + batch_sizes[i]
+
+        batch, _ = edge_match_indices[:, pos1:pos2].reshape(1, -1).squeeze().sort()
+        batches.append(batch)
+
+        pos1 = pos2
+
+    return batches  # indices of edge_index
+
+
+def create_summary_writer(base_path, experiment_name, model_name, extra=None) -> SummaryWriter:
+    timestamp = datetime.datetime.now().strftime('%Y/%m/%d_%H-%M')
+
+    if extra:
+        log_dir = os.path.join(base_path, timestamp, experiment_name, model_name, extra)
+    else:
+        log_dir = os.path.join(base_path, timestamp, experiment_name, model_name)
+
+    return SummaryWriter(log_dir=log_dir)
+
+
+def epoch_summary_write(writer: SummaryWriter, epoch, results):  # store run results of the epoch
+    for tag, result in results.items():
+        writer.add_scalars(main_tag=tag, tag_scalar_dict=result, global_step=epoch)

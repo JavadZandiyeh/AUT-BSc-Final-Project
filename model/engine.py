@@ -1,61 +1,74 @@
 import tqdm
 import torch
 import datetime
-from enum import Enum
+import enum
 import utils
 
 
-class EvalType(Enum):
+class EvalType(enum.Enum):
     VAL = 'validation'
     TEST = 'test'
 
 
-def train_step(model, data, optimizer, loss_fn):
+def train_step(model, data, optimizer, loss_fn, batch_size):
     train_loss = 0
 
     model.train()
 
-    y_pred = model(data)
+    batches = utils.mini_batching(data.edge_index[:, data.edge_mask_train], batch_size)
 
-    loss = loss_fn(y_pred[data.edge_mask_train], data.y[data.edge_mask_train])  # (predicted, actual)
+    for num_batch, batch in enumerate(batches):
+        y_pred = model(data)
 
-    train_loss += loss.item()
+        edge_mask_indices = (data.edge_mask_train.nonzero().T.squeeze())[batch]
 
-    optimizer.zero_grad()
+        loss = loss_fn(y_pred[edge_mask_indices], data.y[edge_mask_indices])  # (predicted, actual)
 
-    loss.backward(retain_graph=True)    # retain_graph might be changed
+        train_loss += loss.item()
 
-    # torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
+        optimizer.zero_grad()
 
-    optimizer.step()
+        loss.backward(retain_graph=True)    # retain_graph might be changed
 
-    val_loss = eval_step(model, data, loss_fn, EvalType.VAL)
+        optimizer.step()
+
+    train_loss /= batch_size
+
+    val_loss = eval_step(model, data, loss_fn, EvalType.VAL, batch_size)
 
     return train_loss, val_loss
 
 
-def eval_step(model, data, loss_fn, eval_type):
+def eval_step(model, data, loss_fn, eval_type, batch_size):
     eval_loss = 0
 
     model.eval()
 
     with torch.inference_mode():
-        y_pred = model(data)
-
         mask = data.edge_mask_val if eval_type == EvalType.VAL else data.edge_mask_test
-        loss = loss_fn(y_pred[mask], data.y[mask])  # (predicted, actual)
 
-        eval_loss += loss.item()
+        batches = utils.mini_batching(data.edge_index[:, mask], batch_size)
+
+        for num_batch, batch in enumerate(batches):
+            y_pred = model(data)
+
+            edge_mask_indices = (mask.nonzero().T.squeeze())[batch]
+
+            loss = loss_fn(y_pred[edge_mask_indices], data.y[edge_mask_indices])  # (predicted, actual)
+
+            eval_loss += loss.item()
+
+    eval_loss /= batch_size
 
     return eval_loss
 
 
-def start(model, data, optimizer, loss_fn, epochs):
+def start(model, data, optimizer, loss_fn, epochs, batch_size, writer):
 
-    for epoch in tqdm.tqdm(range(epochs)):
+    for epoch in tqdm.tqdm(range(1, epochs + 1)):
         print(datetime.datetime.now())
 
-        """ sampling """
+        """ positive and/or negative sampling """
         sampled_data = utils.edge_sampling(data)
 
         """ train and validation """
@@ -63,7 +76,8 @@ def start(model, data, optimizer, loss_fn, epochs):
             model=model,
             data=sampled_data,
             optimizer=optimizer,
-            loss_fn=loss_fn
+            loss_fn=loss_fn,
+            batch_size=batch_size
         )
 
         """ test """
@@ -71,7 +85,17 @@ def start(model, data, optimizer, loss_fn, epochs):
             model=model,
             data=sampled_data,
             loss_fn=loss_fn,
-            eval_type=EvalType.TEST
+            eval_type=EvalType.TEST,
+            batch_size=batch_size
         )
 
-        print(f'epoch: {epoch+1}, train_loss: {train_loss}, val_loss: {val_loss}, test_loss: {test_loss}')
+        """ manage results """
+        results = {
+            'loss': {
+                'train': train_loss,
+                'val': val_loss,
+                'test': test_loss,
+            },
+        }
+
+        utils.epoch_summary_write(writer, epoch, results)
