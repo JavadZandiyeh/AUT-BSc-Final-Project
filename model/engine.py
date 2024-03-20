@@ -2,43 +2,45 @@ import tqdm
 import torch
 import datetime
 import utils
-from torcheval.metrics import functional
-from utils import Metrics, EngineSteps
+import metrics
+from utils import EngineSteps
 
 
 def train_step(model, data, optimizer, loss_fn, batch_size):
-    results = {metric: 0 for metric in Metrics.list()}
+    results = metrics.init_metrics(0)
 
     model.train()
 
     batches = utils.mini_batching(data.edge_index[:, data.edge_mask_train], batch_size)
 
     for num_batch, batch in enumerate(batches):
+        """ predict y """
         y_pred = model(data)
         edge_mask_indices = (data.edge_mask_train.nonzero().T.squeeze())[batch]
         y_pred, y = y_pred[edge_mask_indices], data.y[edge_mask_indices]
-        # y_pred_c, y_c = utils.classify(y_pred), utils.classify(y)
 
         loss = loss_fn(y_pred, y)
-        # accuracy = functional.r2_score(y_pred, y)
 
-        results[Metrics.MSELOSS.value] += loss.item()
-        # results['accuracy'] += accuracy.item()
+        """ calculate batch results """
+        batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, edge_mask_indices)
+        for metric, value in batch_results.items():
+            results[metric] += value
 
         optimizer.zero_grad()
 
-        loss.backward(retain_graph=True)    # retain_graph might be changed
+        loss.backward(retain_graph=True)  # TODO: retain_graph might be changed
 
         optimizer.step()
 
-    results[Metrics.MSELOSS.value] /= batch_size
-    # results['accuracy'] /= batch_size
+    """ average over batches results """
+    for metric, value in results.items():
+        results[metric] /= batch_size
 
     return results
 
 
 def eval_step(model, data, loss_fn, eval_type, batch_size):
-    results = {metric: 0 for metric in Metrics.list()}
+    results = metrics.init_metrics(0)
 
     model.eval()
 
@@ -48,25 +50,26 @@ def eval_step(model, data, loss_fn, eval_type, batch_size):
         batches = utils.mini_batching(data.edge_index[:, mask], batch_size)
 
         for num_batch, batch in enumerate(batches):
+            """ predict y """
             y_pred = model(data)
             edge_mask_indices = (mask.nonzero().T.squeeze())[batch]
             y_pred, y = y_pred[edge_mask_indices], data.y[edge_mask_indices]
-            # y_pred_c, y_c = utils.classify(y_pred), utils.classify(y)
 
             loss = loss_fn(y_pred, y)
-            # accuracy = functional.r2_score(y_pred, y)
 
-            results[Metrics.MSELOSS.value] += loss.item()
-            # results['accuracy'] += accuracy.item()
+            """ calculate batch results """
+            batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, edge_mask_indices)
+            for metric, value in batch_results.items():
+                results[metric] += value
 
-        results[Metrics.MSELOSS.value] /= batch_size
-        # results['accuracy'] /= batch_size
+        """ average over batches results """
+        for metric, value in results.items():
+            results[metric] /= batch_size
 
     return results
 
 
 def start(model, data, optimizer, loss_fn, epochs, batch_size, writer):
-
     for epoch in tqdm.tqdm(range(epochs)):
         print(datetime.datetime.now())
 

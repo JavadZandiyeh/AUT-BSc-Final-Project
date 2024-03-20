@@ -55,7 +55,6 @@ class Metrics(ExtendedEnum):
 
 
 def get_edge_att(x, edge_index, edge_attr):
-    """ This function takes the edge attributes as input and returns the corresponding edge attentions. """
     x1, x2 = x[edge_index[0], :], x[edge_index[1], :]
 
     cosine_sim = torch.nn.functional.cosine_similarity(x1, x2, dim=1)
