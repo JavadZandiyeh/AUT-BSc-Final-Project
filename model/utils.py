@@ -11,7 +11,13 @@ import enum
 from torch.utils.tensorboard.writer import SummaryWriter
 
 
-class DistType(enum.Enum):
+class ExtendedEnum(enum.Enum):
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+
+class DistType(ExtendedEnum):
     NORMAL = 'normal'
     UNIFORM = 'uniform'
     XAVIER_NORMAL = 'xavier_normal'
@@ -20,9 +26,32 @@ class DistType(enum.Enum):
     KAIMING_UNIFORM = 'kaiming_uniform'
 
 
-class DeviceType(enum.Enum):
+class DeviceType(ExtendedEnum):
     CPU = 'cpu'
     CUDA = 'cuda'
+
+
+class EngineSteps(ExtendedEnum):
+    TRAIN = 'train'
+    VAL = 'val'
+    TEST = 'test'
+
+
+class Metrics(ExtendedEnum):
+    NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
+    MRR = 'MRR'  # Mean Reciprocal Rank
+    MAP = 'MAP'  # Mean Average Precision
+    PRU = 'PRU'  # Preference Ranking Utility
+    PRI = 'PRI'  # Preference Ranking Index
+    P_AT_K = 'P@K'  # Precision at K
+    R_AT_K = 'R@K'  # Recall at K
+    HR = 'HR'  # Hit Rate
+    MSELOSS = 'MSELoss'  # Mean Squared Error Loss
+    ACCURACY = 'Accuracy'
+    PRECISION = 'Precision'
+    RECALL = 'Recall'
+    Coverage = 'Coverage'
+    Novelty = 'Novelty'
 
 
 def get_edge_att(x, edge_index, edge_attr):
@@ -214,7 +243,8 @@ def train_val_test(edge_index):  # for undirected graphs only
     return train_mask.bool(), val_mask.bool(), test_mask.bool()
 
 
-def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_replacement=False):  # for undirected graphs only
+def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True,
+                  pos_replacement=False):  # for undirected graphs only
     cdata = data.clone()
 
     """ step 1: positive sampling mask """
@@ -364,9 +394,7 @@ def create_summary_writer(base_path, experiment_name, model_name, extra=None) ->
 
 def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results, test_results):
     # results
-    results = dict.fromkeys(metrics := train_results.keys())
-    for metric in metrics:
-        results[metric] = {'train': 0, 'val': 0, 'test': 0}
+    results = {metric: {'train': 0, 'val': 0, 'test': 0} for metric in Metrics.list()}
 
     for step, step_results in [('train', train_results), ('val', val_results), ('test', test_results)]:
         for metric, value in step_results.items():
@@ -378,3 +406,13 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results
     # writer
     for metric, metric_results in results.items():
         writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
+
+
+def classify(y: torch.Tensor, classes: list | torch.Tensor = None):
+    if classes is None:
+        classes = [0, 0.25, 0.5, 0.75, 1]
+
+    def get_class(value):
+        return min(classes, key=lambda x: abs(x - value))
+
+    return y.apply_(get_class)

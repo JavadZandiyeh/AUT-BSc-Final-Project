@@ -130,10 +130,10 @@ class GATv2ConvModel(torch.nn.Module):
                 )
             )
 
-    def forward(self, data, h_dist_type: utils.DistType = None):
+    def forward(self, data):
         edge_index_uiu, edge_attr_uiu = data.edge_index[:, data.edge_mask_uiu], data.edge_attr[data.edge_mask_uiu]
 
-        h = utils.get_tensor_distribution(data.x.shape, h_dist_type) if h_dist_type else data.x
+        h = data.x
 
         for layer in self.layers:
             h = layer(h, edge_index_uiu, edge_attr_uiu)
