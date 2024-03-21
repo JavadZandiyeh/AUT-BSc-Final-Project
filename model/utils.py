@@ -39,19 +39,19 @@ class EngineSteps(ExtendedEnum):
 
 class Metrics(ExtendedEnum):
     MSELOSS = 'MSELoss'  # Mean Squared Error Loss
-    NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
-    MRR = 'MRR'  # Mean Reciprocal Rank
-    MAP = 'MAP'  # Mean Average Precision
-    PRU = 'PRU'  # Preference Ranking Utility
-    PRI = 'PRI'  # Preference Ranking Index
     P_AT_K = 'P@K'  # Precision at K
-    R_AT_K = 'R@K'  # Recall at K
-    HR = 'HR'  # Hit Rate
-    ACCURACY = 'Accuracy'
-    PRECISION = 'Precision'
-    RECALL = 'Recall'
-    Coverage = 'Coverage'
-    Novelty = 'Novelty'
+    # NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
+    # MRR = 'MRR'  # Mean Reciprocal Rank
+    # MAP = 'MAP'  # Mean Average Precision
+    # PRU = 'PRU'  # Preference Ranking Utility
+    # PRI = 'PRI'  # Preference Ranking Index
+    # R_AT_K = 'R@K'  # Recall at K
+    # HR = 'HR'  # Hit Rate
+    # ACCURACY = 'Accuracy'
+    # PRECISION = 'Precision'
+    # RECALL = 'Recall'
+    # Coverage = 'Coverage'
+    # Novelty = 'Novelty'
 
 
 def get_edge_att(x, edge_index, edge_attr):
@@ -225,19 +225,19 @@ def train_val_test(edge_index):  # for undirected graphs only
     _, val_indices = pos_edge_sampling(edge_index, num_val)
     mask[val_indices] = 1
 
-    train_test_indices = torch.nonzero(mask == 0).T.squeeze()
+    train_test_indices = torch.nonzero(mask.eq(0)).T.squeeze()
     _, test_indices = pos_edge_sampling(edge_index[:, train_test_indices], num_test)
     test_indices = train_test_indices[test_indices]
     mask[test_indices] = 2
 
     train_mask = torch.zeros_like(edge_index[0])
-    train_mask[torch.nonzero(mask == 0).T.squeeze()] = 1
+    train_mask[torch.nonzero(mask.eq(0)).T.squeeze()] = 1
 
     val_mask = torch.zeros_like(edge_index[0])
-    val_mask[torch.nonzero(mask == 1).T.squeeze()] = 1
+    val_mask[torch.nonzero(mask.eq(1)).T.squeeze()] = 1
 
     test_mask = torch.zeros_like(edge_index[0])
-    test_mask[torch.nonzero(mask == 2).T.squeeze()] = 1
+    test_mask[torch.nonzero(mask.eq(2)).T.squeeze()] = 1
 
     return train_mask.bool(), val_mask.bool(), test_mask.bool()
 

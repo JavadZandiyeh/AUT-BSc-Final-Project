@@ -24,12 +24,13 @@ def train_step(model, data, optimizer, loss_fn, batch_size):
     for num_batch, batch_mask in enumerate(batches_mask):
         """ predict y """
         y_pred = model(data)
-        y_pred, y = y_pred[batch_mask], data.y[batch_mask]
 
-        loss = loss_fn(y_pred, y)
+        y_pred_batch, y_batch = y_pred[batch_mask], data.y[batch_mask]
+
+        loss = loss_fn(y_pred_batch, y_batch)
 
         """ calculate batch results """
-        batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, batch_mask)
+        batch_results = metrics.calculate_metrics(data, batch_mask, y_pred_batch, y_batch, loss)
         for metric, value in batch_results.items():
             results[metric] += value
 
@@ -67,12 +68,13 @@ def eval_step(model, data, loss_fn, eval_type, batch_size):
         for num_batch, batch_mask in enumerate(batches_mask):
             """ predict y """
             y_pred = model(data)
-            y_pred, y = y_pred[batch_mask], data.y[batch_mask]
 
-            loss = loss_fn(y_pred, y)
+            y_pred_batch, y_batch = y_pred[batch_mask], data.y[batch_mask]
+
+            loss = loss_fn(y_pred_batch, y_batch)
 
             """ calculate batch results """
-            batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, batch_mask)
+            batch_results = metrics.calculate_metrics(data, batch_mask, y_pred_batch, y_batch, loss)
             for metric, value in batch_results.items():
                 results[metric] += value
 
