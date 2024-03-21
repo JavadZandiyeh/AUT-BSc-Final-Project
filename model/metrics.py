@@ -31,7 +31,4 @@ def calculate_metrics(y_pred, y, loss, data, edge_mask_indices):
     # MSELoss
     results[Metrics.MSELOSS.value] = loss
 
-    # P@K
-    results[Metrics.P_AT_K.value] = 2 * loss
-
     return results

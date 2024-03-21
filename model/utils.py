@@ -38,6 +38,7 @@ class EngineSteps(ExtendedEnum):
 
 
 class Metrics(ExtendedEnum):
+    MSELOSS = 'MSELoss'  # Mean Squared Error Loss
     NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
     MRR = 'MRR'  # Mean Reciprocal Rank
     MAP = 'MAP'  # Mean Average Precision
@@ -46,7 +47,6 @@ class Metrics(ExtendedEnum):
     P_AT_K = 'P@K'  # Precision at K
     R_AT_K = 'R@K'  # Recall at K
     HR = 'HR'  # Hit Rate
-    MSELOSS = 'MSELoss'  # Mean Squared Error Loss
     ACCURACY = 'Accuracy'
     PRECISION = 'Precision'
     RECALL = 'Recall'
@@ -355,7 +355,6 @@ def get_edge_match_indices(edge_index):  # for undirected graphs only
 
 def mini_batching(edge_index, num_batches):  # for undirected graphs only
     # edge_match_indices and shuffling
-
     edge_match_indices = get_edge_match_indices(edge_index)
     num_edges = edge_match_indices.size(1)
     edge_match_indices = edge_match_indices[:, torch.randperm(num_edges)]  # shuffling
@@ -367,17 +366,21 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     batch_sizes[:remainder] += 1
 
     # batches
-    batches, pos1 = list(), 0
+    batches_mask, pos1 = list(), 0
 
     for i in range(num_batches):
         pos2 = pos1 + batch_sizes[i]
 
-        batch, _ = edge_match_indices[:, pos1:pos2].reshape(1, -1).squeeze().sort()
-        batches.append(batch)
+        batch_indices = edge_match_indices[:, pos1:pos2].reshape(1, -1).squeeze()
+
+        batch_mask = torch.zeros_like(edge_index[0]).bool()
+        batch_mask[batch_indices] = True
+
+        batches_mask.append(batch_mask)
 
         pos1 = pos2
 
-    return batches  # indices of edge_index
+    return batches_mask
 
 
 def create_summary_writer(base_path, experiment_name, model_name, extra=None) -> SummaryWriter:

@@ -11,18 +11,25 @@ def train_step(model, data, optimizer, loss_fn, batch_size):
 
     model.train()
 
-    batches = utils.mini_batching(data.edge_index[:, data.edge_mask_train], batch_size)
+    """ batch preparation """
+    edge_index_train = data.edge_index[:, data.edge_mask_train]
+    batches_mask = utils.mini_batching(edge_index_train, batch_size)
+    for i in range(batch_size):
+        batch_mask_indices = (data.edge_mask_train.nonzero().T.squeeze())[batches_mask[i]]
+        new_batch_mask = torch.zeros_like(data.edge_index[0]).bool()
+        new_batch_mask[batch_mask_indices] = True
+        batches_mask[i] = new_batch_mask
 
-    for num_batch, batch in enumerate(batches):
+    """ loop over batches """
+    for num_batch, batch_mask in enumerate(batches_mask):
         """ predict y """
         y_pred = model(data)
-        edge_mask_indices = (data.edge_mask_train.nonzero().T.squeeze())[batch]
-        y_pred, y = y_pred[edge_mask_indices], data.y[edge_mask_indices]
+        y_pred, y = y_pred[batch_mask], data.y[batch_mask]
 
         loss = loss_fn(y_pred, y)
 
         """ calculate batch results """
-        batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, edge_mask_indices)
+        batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, batch_mask)
         for metric, value in batch_results.items():
             results[metric] += value
 
@@ -45,20 +52,27 @@ def eval_step(model, data, loss_fn, eval_type, batch_size):
     model.eval()
 
     with torch.inference_mode():
-        mask = data.edge_mask_val if eval_type == EngineSteps.VAL else data.edge_mask_test
+        edge_mask_eval = data.edge_mask_val if eval_type == EngineSteps.VAL else data.edge_mask_test
 
-        batches = utils.mini_batching(data.edge_index[:, mask], batch_size)
+        """ batch preparation """
+        edge_index_eval = data.edge_index[:, edge_mask_eval]
+        batches_mask = utils.mini_batching(edge_index_eval, batch_size)
+        for i in range(batch_size):
+            batch_mask_indices = (edge_mask_eval.nonzero().T.squeeze())[batches_mask[i]]
+            new_batch_mask = torch.zeros_like(data.edge_index[0]).bool()
+            new_batch_mask[batch_mask_indices] = True
+            batches_mask[i] = new_batch_mask
 
-        for num_batch, batch in enumerate(batches):
+        """ loop over batches """
+        for num_batch, batch_mask in enumerate(batches_mask):
             """ predict y """
             y_pred = model(data)
-            edge_mask_indices = (mask.nonzero().T.squeeze())[batch]
-            y_pred, y = y_pred[edge_mask_indices], data.y[edge_mask_indices]
+            y_pred, y = y_pred[batch_mask], data.y[batch_mask]
 
             loss = loss_fn(y_pred, y)
 
             """ calculate batch results """
-            batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, edge_mask_indices)
+            batch_results = metrics.calculate_metrics(y_pred, y, loss.item(), data, batch_mask)
             for metric, value in batch_results.items():
                 results[metric] += value
 
