@@ -39,12 +39,13 @@ class EngineSteps(ExtendedEnum):
 class Metrics(ExtendedEnum):
     MSELOSS = 'MSELoss'  # Mean Squared Error Loss
     P_AT_K = 'P@K'  # Precision at K
+    R_AT_K = 'R@K'  # Recall at K
+    FScore = 'FScore'  # F Score
     # NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
     # MRR = 'MRR'  # Mean Reciprocal Rank
     # MAP = 'MAP'  # Mean Average Precision
     # PRU = 'PRU'  # Preference Ranking Utility
     # PRI = 'PRI'  # Preference Ranking Index
-    # R_AT_K = 'R@K'  # Recall at K
     # HR = 'HR'  # Hit Rate
     # ACCURACY = 'Accuracy'
     # PRECISION = 'Precision'
