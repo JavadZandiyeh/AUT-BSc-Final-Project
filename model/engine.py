@@ -18,9 +18,9 @@ def train_step(model, data, optimizer, loss_fn, batch_size):
         y_pred = model(data)
 
         """ mini-batch mask """
-        batch_mask_indices = (data.edge_mask_train.nonzero().T.squeeze())[batch]
+        batch = (data.edge_mask_train.nonzero().T.squeeze())[batch]
         batch_mask = torch.zeros_like(data.edge_index[0]).bool()
-        batch_mask[batch_mask_indices] = True
+        batch_mask[batch] = True
 
         y_pred_batch, y_batch = y_pred[batch_mask], data.y[batch_mask]
 
@@ -52,16 +52,16 @@ def eval_step(model, data, loss_fn, eval_type, batch_size):
     with torch.inference_mode():
         edge_mask_eval = data.edge_mask_val if eval_type == EngineSteps.VAL else data.edge_mask_test
 
-        batches = utils.mini_batching(edge_mask_eval, batch_size)
+        batches = utils.mini_batching(data.edge_index[:, edge_mask_eval], batch_size)
 
         """ loop over batches """
         for num_batch, batch in enumerate(batches):
             y_pred = model(data)
 
             """ mini-batch mask """
-            batch_mask_indices = (edge_mask_eval.nonzero().T.squeeze())[batch]
+            batch = (edge_mask_eval.nonzero().T.squeeze())[batch]
             batch_mask = torch.zeros_like(data.edge_index[0]).bool()
-            batch_mask[batch_mask_indices] = True
+            batch_mask[batch] = True
 
             y_pred_batch, y_batch = y_pred[batch_mask], data.y[batch_mask]
 
@@ -83,7 +83,7 @@ def start(model, data, optimizer, loss_fn, epochs, batch_size, writer):
     for epoch in tqdm.tqdm(range(epochs)):
         print(datetime.datetime.now())
 
-        sampled_data = utils.edge_sampling(data, pos_rate=0.4)
+        sampled_data = utils.edge_sampling(data)
 
         train_results = train_step(model, sampled_data, optimizer, loss_fn, batch_size)
 

@@ -6,17 +6,24 @@ def init_metrics(value=0):
     return {metric: value for metric in Metrics.list()}
 
 
-def precision_at_k(user_rec_dict, k=10):
-    p_at_k_dict = dict()
+def p_at_k(edge_index, users, y_pred, y, k=10):
+    p_at_k_avg = 0
 
-    for user, rec in user_rec_dict.items():
-        k_adjusted = min(k, rec.size(1))
-        _, topk_indices = torch.topk(rec[0], k_adjusted)
-        p_at_k_dict[user] = rec[1, topk_indices].round().sum().float() / k_adjusted
+    for user in users:
+        user_edge_mask = edge_index[0].eq(user)
 
-    p_at_k_avg = sum(p_at_k_dict.values()) / len(p_at_k_dict)
+        k_adjusted = min(k, int(user_edge_mask.sum()))
 
-    return p_at_k_dict, p_at_k_avg
+        if k_adjusted > 0:
+            y_pred_user, y_user = y_pred[user_edge_mask], y[user_edge_mask]
+
+            _, topk_indices = torch.topk(y_pred_user, k_adjusted)
+
+            p_at_k_avg += float(y_user[topk_indices].round().sum()) / k_adjusted
+
+    p_at_k_avg /= len(users)
+
+    return p_at_k_avg
 
 
 def calculate_metrics(data, batch_mask, y_pred_batch, y_batch, loss):
@@ -26,16 +33,10 @@ def calculate_metrics(data, batch_mask, y_pred_batch, y_batch, loss):
 
     users = data.node_mask_user.nonzero().squeeze().tolist()
 
-    user_rec_dict = dict()  # recommendation dict for each user
-    for user in users:
-        edge_indices = edge_index_batch[0].eq(user).nonzero().squeeze()
-        user_rec_dict[user] = torch.vstack((y_pred_batch[edge_indices], y_batch[edge_indices]))
-
     # MSELoss
     results[Metrics.MSELOSS.value] = loss.item()
 
     # P@K
-    _, p_at_k = precision_at_k(user_rec_dict, 10)
-    results[Metrics.P_AT_K.value] = p_at_k
+    results[Metrics.P_AT_K.value] = p_at_k(edge_index_batch, users, y_pred_batch, y_batch)
 
     return results

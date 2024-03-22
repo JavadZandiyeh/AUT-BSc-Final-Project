@@ -1,4 +1,3 @@
-import datetime
 import os
 import pprint
 import random
@@ -338,7 +337,7 @@ def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_repl
 def get_edge_match_indices(edge_index):  # for undirected graphs only
     edge_index_cloned = edge_index.clone()
 
-    indices = torch.arange(0, edge_index_cloned.shape[1]).reshape(1, -1).to(get_device())
+    indices = torch.arange(0, edge_index_cloned.size(1)).reshape(1, -1).squeeze().to(get_device())
     edge_index_cloned = torch.vstack((edge_index_cloned, indices))  # add indices of each column
 
     src = edge_index_cloned[:, edge_index_cloned[0, :] < edge_index_cloned[1, :]]
@@ -380,9 +379,8 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
 
 
 def create_summary_writer(model_name, epochs, batch_size, learning_rate) -> SummaryWriter:
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d/%H-%M-%S')
 
-    log_dir = os.path.join('../runs', timestamp, model_name, f'e{epochs}', f'b{batch_size}', f'lr{learning_rate}')
+    log_dir = os.path.join('../runs', model_name, f'e{epochs}-b{batch_size}-lr{learning_rate}')
 
     return SummaryWriter(log_dir=log_dir)
 
