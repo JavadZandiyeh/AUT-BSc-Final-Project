@@ -1,7 +1,7 @@
+import datetime
 import os
 import pprint
 import random
-import datetime
 
 import numpy as np
 import torch
@@ -242,8 +242,7 @@ def train_val_test(edge_index):  # for undirected graphs only
     return train_mask.bool(), val_mask.bool(), test_mask.bool()
 
 
-def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True,
-                  pos_replacement=False):  # for undirected graphs only
+def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_replacement=False):  # for undirected graphs only
     cdata = data.clone()
 
     """ step 1: positive sampling mask """
@@ -361,35 +360,29 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
 
     # batch sizes
     quotient, remainder = num_edges // num_batches, num_edges % num_batches
-    batch_sizes = torch.ones((num_batches,), dtype=torch.int64).to(get_device())
-    batch_sizes *= quotient
+    batch_sizes = torch.zeros((num_batches,), dtype=torch.int64).to(get_device())
+    batch_sizes += quotient
     batch_sizes[:remainder] += 1
 
     # batches
-    batches_mask, pos1 = list(), 0
+    batches, pos1 = list(), 0
 
     for i in range(num_batches):
         pos2 = pos1 + batch_sizes[i]
 
-        batch_indices = edge_match_indices[:, pos1:pos2].reshape(1, -1).squeeze()
+        batch, _ = edge_match_indices[:, pos1:pos2].reshape(1, -1).squeeze().sort()
 
-        batch_mask = torch.zeros_like(edge_index[0]).bool()
-        batch_mask[batch_indices] = True
-
-        batches_mask.append(batch_mask)
+        batches.append(batch)
 
         pos1 = pos2
 
-    return batches_mask
+    return batches  # indices of edge_index
 
 
-def create_summary_writer(base_path, experiment_name, model_name, extra=None) -> SummaryWriter:
+def create_summary_writer(model_name, epochs, batch_size, learning_rate) -> SummaryWriter:
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d/%H-%M-%S')
 
-    if extra:
-        log_dir = os.path.join(base_path, timestamp, experiment_name, model_name, extra)
-    else:
-        log_dir = os.path.join(base_path, timestamp, experiment_name, model_name)
+    log_dir = os.path.join('../runs', timestamp, model_name, f'e{epochs}', f'b{batch_size}', f'lr{learning_rate}')
 
     return SummaryWriter(log_dir=log_dir)
 

@@ -25,12 +25,6 @@ data_base_path = config.get('dataset', 'imdb_1m_path')
 data = torch.load(f'{data_base_path}/data.pt')
 data = data.to(device)
 
-# Setup writer
-writer_base_path = config.get('writer', 'base_path')
-writer_experiment_name = config.get('writer', 'experiment')
-writer_model_name = config.get('writer', 'model')
-writer_extra = config.get('writer', 'extra')
-
 if __name__ == '__main__':
     channel = data.num_node_features
 
@@ -51,16 +45,8 @@ if __name__ == '__main__':
 
     loss_fn = torch.nn.MSELoss().to(device)
 
-    writer = utils.create_summary_writer(writer_base_path, writer_experiment_name, writer_model_name, writer_extra)
+    writer = utils.create_summary_writer(model._get_name(), epochs, batch_size, learning_rate)
 
-    engine.start(
-        model=model,
-        data=data,
-        optimizer=optimizer,
-        loss_fn=loss_fn,
-        epochs=epochs,
-        batch_size=batch_size,
-        writer=writer
-    )
+    engine.start(model, data, optimizer, loss_fn, epochs, batch_size, writer)
 
     writer.close()
