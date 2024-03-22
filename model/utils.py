@@ -41,7 +41,7 @@ class Metrics(ExtendedEnum):
     P_AT_K = 'P@K'  # Precision at K
     R_AT_K = 'R@K'  # Recall at K
     FScore = 'FScore'  # F Score
-    # NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
+    NDCG_AT_K = 'NDCG@K'  # Normalized Discount Cumulative Gain at K
     # MRR = 'MRR'  # Mean Reciprocal Rank
     # MAP = 'MAP'  # Mean Average Precision
     # PRU = 'PRU'  # Preference Ranking Utility
@@ -409,4 +409,6 @@ def classify(y: torch.Tensor, classes: list | torch.Tensor = None):
     def get_class(value):
         return min(classes, key=lambda x: abs(x - value))
 
-    return y.apply_(get_class)
+    y_clone = y.clone().to(DeviceType.CPU.value)
+
+    return y_clone.apply_(get_class).to(get_device())
