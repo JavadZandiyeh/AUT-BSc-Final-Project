@@ -79,11 +79,11 @@ def eval_step(model, data, loss_fn, eval_type, batch_size):
     return results
 
 
-def start(model, data, optimizer, loss_fn, epochs, batch_size, writer):
+def start(model, data, optimizer, loss_fn, epochs, batch_size, pos_sampling_rate, neg_sampling_rate, writer):
     for epoch in tqdm.tqdm(range(epochs)):
         print(datetime.datetime.now())
 
-        sampled_data = utils.edge_sampling(data)
+        sampled_data = utils.edge_sampling(data, pos_sampling_rate, neg_sampling_rate)
 
         train_results = train_step(model, sampled_data, optimizer, loss_fn, batch_size)
 

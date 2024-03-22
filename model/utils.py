@@ -378,9 +378,9 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     return batches  # indices of edge_index
 
 
-def create_summary_writer(model_name, epochs, batch_size, learning_rate) -> SummaryWriter:
+def create_summary_writer(model_name, epochs, batch_size, learning_rate, pos_sampling_rate, neg_sampling_rate) -> SummaryWriter:
 
-    log_dir = os.path.join('../runs', model_name, f'e{epochs}-b{batch_size}-lr{learning_rate}')
+    log_dir = os.path.join('../runs', model_name, f'e{epochs}-b{batch_size}-lr{learning_rate}-pos{pos_sampling_rate}-neg{neg_sampling_rate}')
 
     return SummaryWriter(log_dir=log_dir)
 

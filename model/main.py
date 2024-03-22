@@ -15,6 +15,8 @@ config.read('config.ini')
 epochs = config.getint('model', 'epochs')
 learning_rate = config.getfloat('model', 'learning_rate')
 batch_size = config.getint('model', 'batch_size')
+pos_sampling_rate = config.getfloat('model', 'pos_sampling_rate')
+neg_sampling_rate = config.getfloat('model', 'neg_sampling_rate')
 
 # Setup device and environment
 device = utils.get_device()
@@ -45,8 +47,8 @@ if __name__ == '__main__':
 
     loss_fn = torch.nn.MSELoss().to(device)
 
-    writer = utils.create_summary_writer(model._get_name(), epochs, batch_size, learning_rate)
+    writer = utils.create_summary_writer(model._get_name(), epochs, batch_size, learning_rate, pos_sampling_rate, neg_sampling_rate)
 
-    engine.start(model, data, optimizer, loss_fn, epochs, batch_size, writer)
+    engine.start(model, data, optimizer, loss_fn, epochs, batch_size, pos_sampling_rate, neg_sampling_rate, writer)
 
     writer.close()
