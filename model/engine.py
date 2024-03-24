@@ -13,16 +13,17 @@ def train_step(model, data, optimizer, loss_fn, batch_size):
     model.train()
 
     edge_index_train = data.edge_index[:, data.edge_mask_train]
+
     batches = utils.mini_batching(edge_index_train, batch_size)
 
     """ loop over batches """
     for num_batch, batch in enumerate(batches):
-        y_pred = model(data)
-
-        """ mini-batch mask """
+        """ create batch_mask """
         batch = (data.edge_mask_train.nonzero().T.squeeze())[batch]
         batch_mask = torch.zeros_like(data.edge_index[0]).bool()
         batch_mask[batch] = True
+
+        y_pred = model(data)
 
         y_pred_batch, y_batch = y_pred[batch_mask], data.y[batch_mask]
 
@@ -33,7 +34,7 @@ def train_step(model, data, optimizer, loss_fn, batch_size):
         edge_index_batch = data.edge_index[:, batch_mask]
         batch_results = metrics.calculate_metrics(users, edge_index_batch, y_pred_batch, y_batch, loss.item())
 
-        """ add batch_results to the results """
+        """ calculate overall results """
         results = {metric: results[metric] + batch_result for metric, batch_result in batch_results.items()}
 
         optimizer.zero_grad()
@@ -42,7 +43,7 @@ def train_step(model, data, optimizer, loss_fn, batch_size):
 
         optimizer.step()
 
-    """ average over batches results """
+    """ average results based on batch_size """
     results = {metric: result / batch_size for metric, result in results.items()}
 
     return results
