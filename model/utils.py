@@ -379,18 +379,26 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     return batches  # indices of edge_index
 
 
-def create_summary_writer(model_name, epochs, batch_size, learning_rate, pos_sampling_rate, neg_sampling_rate) -> SummaryWriter:
+def create_summary_writer(run_name, model_name, epochs, batch_size, learning_rate, pos_sampling_rate,
+                          neg_sampling_rate) -> SummaryWriter:
 
-    log_dir = os.path.join('../runs', model_name, f'e{epochs}-b{batch_size}-lr{learning_rate}-pos{pos_sampling_rate}-neg{neg_sampling_rate}')
+    model_details = f'e{epochs}-b{batch_size}-lr{learning_rate}-pos{pos_sampling_rate}-neg{neg_sampling_rate}'
+
+    log_dir = os.path.join(
+        '../runs',
+        run_name,
+        model_name,
+        model_details,
+    )
 
     return SummaryWriter(log_dir=log_dir)
 
 
-def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results, test_results):
+def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results):
     # results
-    results = {metric: {'train': 0, 'val': 0, 'test': 0} for metric in Metrics.list()}
+    results = {metric: {'train': 0, 'val': 0} for metric in Metrics.list()}
 
-    for step, step_results in [('train', train_results), ('val', val_results), ('test', test_results)]:
+    for step, step_results in [('train', train_results), ('val', val_results)]:
         for metric, value in step_results.items():
             results[metric][step] = value
 
