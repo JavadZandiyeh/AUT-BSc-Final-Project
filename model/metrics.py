@@ -9,39 +9,39 @@ def init_metrics(value=0):
 
 def precision_at_k(users, edge_index, y_pred, y_rel, k=10):
     p_at_k_avg = 0
-    counter = 0  # number of users who have neighbors
+    num_users = 0
 
     for user in users:
-        user_edge_mask = edge_index[0].eq(user)
-        y_pred_user, y_rel_user = y_pred[user_edge_mask], y_rel[user_edge_mask]
-        k_adjusted = min(k, int(user_edge_mask.sum()))
+        edge_mask_user = edge_index[0].eq(user)
+        y_pred_user, y_rel_user = y_pred[edge_mask_user], y_rel[edge_mask_user]
+        k_adjusted = min(k, int(edge_mask_user.sum()))
 
         if k_adjusted > 0:
             _, topk_indices = torch.topk(y_pred_user, k_adjusted)
             p_at_k_avg += y_rel_user[topk_indices].sum() / k_adjusted
-            counter += 1
+            num_users += 1
 
-    p_at_k_avg /= counter if counter != 0 else 1
+    p_at_k_avg /= max(1, num_users)
 
     return float(p_at_k_avg)
 
 
 def recall_at_k(users, edge_index, y_pred, y_rel, k=10):
     r_at_k_avg = 0
-    counter = 0  # number of users who have neighbors
+    num_users = 0
 
     for user in users:
-        user_edge_mask = edge_index[0].eq(user)
-        y_pred_user, y_rel_user = y_pred[user_edge_mask], y_rel[user_edge_mask]
+        edge_mask_user = edge_index[0].eq(user)
+        y_pred_user, y_rel_user = y_pred[edge_mask_user], y_rel[edge_mask_user]
         tot_rel = y_rel_user.sum()
-        k_adjusted = min(k, int(user_edge_mask.sum()))
+        k_adjusted = min(k, int(edge_mask_user.sum()))
 
         if tot_rel > 0 and k_adjusted > 0:
             _, topk_indices = torch.topk(y_pred_user, k_adjusted)
             r_at_k_avg += y_rel_user[topk_indices].sum() / tot_rel
-            counter += 1
+            num_users += 1
 
-    r_at_k_avg /= counter if counter != 0 else 1
+    r_at_k_avg /= max(1, num_users)
 
     return float(r_at_k_avg)
 
@@ -52,29 +52,30 @@ def f_score(p_at_k, r_at_k, beta=1):
 
 def ndcg_at_k(users, edge_index, y_pred, y, k=10):
     ndcg_at_k_avg = 0
-    counter = 0  # number of users who have neighbors
+    num_users = 0
 
     for user in users:
-        user_edge_mask = edge_index[0].eq(user)
-        k_adjusted = min(k, int(user_edge_mask.sum()))
+        edge_mask_user = edge_index[0].eq(user)
+        k_adjusted = min(k, int(edge_mask_user.sum()))
 
         if k_adjusted > 0:
             d = torch.arange(2, k_adjusted + 2).log2().to(utils.get_device())  # discount
 
-            y_pred_user, y_user = y_pred[user_edge_mask], y[user_edge_mask]
+            y_pred_user, y_user = y_pred[edge_mask_user], y[edge_mask_user]
 
             _, topk_y_pred_user_indices = torch.topk(y_pred_user, k_adjusted)
             topk_y_user, _ = torch.topk(y_user, k_adjusted)
 
-            dcg_y_pred_user = (y_user[topk_y_pred_user_indices] / d).sum()  # discount cumulative gain
-            dcg_y_user = (topk_y_user / d).sum()  # discount cumulative gain
+            dcg_y_pred_user = (y_user[topk_y_pred_user_indices] / d).sum()  # discount cumulative gain (predicted)
+            dcg_y_user = (topk_y_user / d).sum()  # discount cumulative gain (normal)
 
             # normalized discount cumulative gain
-            ndcg_user = dcg_y_pred_user / dcg_y_user if dcg_y_user != 0 else 1 - utils.classify(dcg_y_pred_user, [0, 1])
-            ndcg_at_k_avg += ndcg_user
-            counter += 1
+            if dcg_y_user > 0:
+                ndcg_user = dcg_y_pred_user / dcg_y_user
+                ndcg_at_k_avg += ndcg_user
+                num_users += 1
 
-    ndcg_at_k_avg /= counter if counter != 0 else 1
+    ndcg_at_k_avg /= max(1, num_users)
 
     return float(ndcg_at_k_avg)
 

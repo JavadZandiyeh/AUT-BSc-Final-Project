@@ -83,14 +83,11 @@ def get_device():
     return device
 
 
-def get_edge_y_pred(h, edge_index, edge_attr, edge_mask):
+def edge_prediction(h, edge_index):
     h_j = torch.index_select(h, 0, edge_index[0])
     h_i = torch.index_select(h, 0, edge_index[1])
 
-    edge_y_pred = torch.zeros_like(edge_attr)
-    edge_y_pred[edge_mask] = torch.nn.functional.cosine_similarity(h_j, h_i, dim=1)
-
-    return edge_y_pred
+    return torch.nn.functional.cosine_similarity(h_j, h_i, dim=1)
 
 
 def get_tensor_distribution(shape, _type: DistType = None):
@@ -288,26 +285,12 @@ def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_repl
         neg_edge_mask_train, neg_edge_mask_val, neg_edge_mask_test = train_val_test(neg_edge_index_uiu)
 
         cdata_stacked = torch.vstack((
-            cdata.edge_index,
-            cdata.edge_mask_uiu,
-            cdata.edge_mask_ii,
-            cdata.edge_attr,
-            cdata.y,
-            cdata.edge_mask_train,
-            cdata.edge_mask_val,
-            cdata.edge_mask_test
-        ))
+            cdata.edge_index, cdata.edge_mask_uiu, cdata.edge_mask_ii, cdata.edge_attr, cdata.y, cdata.edge_mask_train,
+            cdata.edge_mask_val, cdata.edge_mask_test))
 
         neg_cdata_stacked = torch.vstack((
-            neg_edge_index_uiu,
-            neg_edge_mask_uiu,
-            neg_edge_mask_ii,
-            neg_edge_attr,
-            neg_y,
-            neg_edge_mask_train,
-            neg_edge_mask_val,
-            neg_edge_mask_test
-        ))
+            neg_edge_index_uiu, neg_edge_mask_uiu, neg_edge_mask_ii, neg_edge_attr, neg_y, neg_edge_mask_train,
+            neg_edge_mask_val, neg_edge_mask_test))
 
         stack = torch.hstack((cdata_stacked, neg_cdata_stacked))
         stack_sorted_indices = lexsort_tensor((stack[1], stack[0]))
@@ -379,17 +362,14 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     return batches  # indices of edge_index
 
 
-def create_summary_writer(run_name, model_name, epochs, batch_size, learning_rate, pos_sampling_rate,
-                          neg_sampling_rate) -> SummaryWriter:
+def create_summary_writer(model_name, settings) -> SummaryWriter:
+    model_details = f'e{settings["epochs"]}'\
+        + f'-b{settings["num_batches"]}'\
+        + f'-lr{settings["learning_rate"]}'\
+        + f'-pos{settings["pos_sampling_rate"]}'\
+        + f'-neg{settings["neg_sampling_rate"]}'
 
-    model_details = f'e{epochs}-b{batch_size}-lr{learning_rate}-pos{pos_sampling_rate}-neg{neg_sampling_rate}'
-
-    log_dir = os.path.join(
-        '../runs',
-        run_name,
-        model_name,
-        model_details,
-    )
+    log_dir = os.path.join('../runs', model_name, settings["run_name"], model_details)
 
     return SummaryWriter(log_dir=log_dir)
 

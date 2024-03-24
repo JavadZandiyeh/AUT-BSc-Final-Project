@@ -131,13 +131,13 @@ class GATv2ConvModel(torch.nn.Module):
             )
 
     def forward(self, data):
-        edge_index_uiu, edge_attr_uiu = data.edge_index[:, data.edge_mask_uiu], data.edge_attr[data.edge_mask_uiu]
+        # prepare required variables
+        edge_index = data.edge_index[:, data.edge_mask_train]
+        edge_attr = data.edge_attr[data.edge_mask_train]
+        h = data.x.clone()
 
-        h = data.x
-
+        # forward over layers
         for layer in self.layers:
-            h = layer(h, edge_index_uiu, edge_attr_uiu)
+            h = layer(h, edge_index, edge_attr)
 
-        edge_y_pred = utils.get_edge_y_pred(h, edge_index_uiu, data.edge_attr, data.edge_mask_uiu)
-
-        return edge_y_pred
+        return h
