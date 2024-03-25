@@ -419,4 +419,4 @@ def save_model(model, settings):
 
     path = os.path.join(path, model_name)
 
-    torch.save(obj=model.state_dict(), f=path)
+    torch.save(obj=model, f=path)

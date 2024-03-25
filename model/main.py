@@ -33,7 +33,9 @@ def get_model():
     channel = data.num_node_features
 
     if settings['model_name'] == 'GATv2ConvModel':
-        _model = models.GATv2ConvModel([channel, channel, channel])
+        _model = models.GATv2ConvModel(
+            channels=[channel, channel, channel]
+        )
     else:
         _model = models.BigraphModel(
             channels_ii=[channel, channel, channel],
@@ -44,7 +46,6 @@ def get_model():
 
 
 if __name__ == '__main__':
-    # case 1
     model = get_model().to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=settings['learning_rate'])
