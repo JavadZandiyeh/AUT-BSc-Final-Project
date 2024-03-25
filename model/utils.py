@@ -10,6 +10,9 @@ import enum
 from torch.utils.tensorboard.writer import SummaryWriter
 
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
 class ExtendedEnum(enum.Enum):
     @classmethod
     def list(cls):
@@ -23,11 +26,6 @@ class DistType(ExtendedEnum):
     XAVIER_UNIFORM = 'xavier_uniform'
     KAIMING_NORMAL = 'kaiming_normal'
     KAIMING_UNIFORM = 'kaiming_uniform'
-
-
-class DeviceType(ExtendedEnum):
-    CPU = 'cpu'
-    CUDA = 'cuda'
 
 
 class EngineSteps(ExtendedEnum):
@@ -76,13 +74,6 @@ def print_graph_diameter(x, edge_index, approximate=False):
         print(f"component: {i}, length {len(component)}, diameter: {diameter}")
 
 
-def get_device():
-    device = DeviceType.CUDA.value if torch.cuda.is_available() else DeviceType.CPU.value
-    device = torch.device(device)
-
-    return device
-
-
 def edge_prediction(x, edge_index):
     x_j = torch.index_select(x, 0, edge_index[0])
     x_i = torch.index_select(x, 0, edge_index[1])
@@ -91,7 +82,7 @@ def edge_prediction(x, edge_index):
 
 
 def get_tensor_distribution(shape, _type: DistType = None):
-    dist = torch.empty(shape).to(get_device())
+    dist = torch.empty(shape).to(device)
 
     if _type == DistType.XAVIER_NORMAL:
         torch.nn.init.xavier_normal_(dist)
@@ -136,11 +127,11 @@ def get_adj_dict(edge_index):
 
 def lexsort_tensor(tup):
     # convert all tuple values to numpy type
-    tup = tuple(map(lambda x: x.to(DeviceType.CPU.value).numpy(), list(tup)))
+    tup = tuple(map(lambda x: x.to('cpu').numpy(), list(tup)))
     indices = np.lexsort(tup)
 
     # convert back to torch type and the device
-    indices = torch.from_numpy(indices).to(get_device())
+    indices = torch.from_numpy(indices).to(device)
 
     return indices
 
@@ -165,7 +156,7 @@ def neg_edge_sampling(edge_index, num_neg_samples=1, rate=1.0):  # for undirecte
                 neg_edge_index.append([node, neg_neighbor])
                 neg_edge_index.append([neg_neighbor, node])
 
-        neg_edge_index = torch.tensor(neg_edge_index).T.to(get_device())
+        neg_edge_index = torch.tensor(neg_edge_index).T.to(device)
     else:
         edge_index_src = edge_index[:, edge_index[0, :] < edge_index[1, :]]
         num_nodes = len(torch.unique(edge_index_src))
@@ -183,7 +174,7 @@ def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for 
     edge_index_cloned = edge_index.clone()
 
     # step 1: switch to cpu for working with numpy arrays
-    edge_index_cloned = edge_index_cloned.to(DeviceType.CPU.value).numpy()
+    edge_index_cloned = edge_index_cloned.to('cpu').numpy()
     indices = np.arange(edge_index_cloned.shape[1]).reshape(1, -1)
     edge_index_cloned = np.vstack((edge_index_cloned, indices))  # add indices of each column
 
@@ -205,7 +196,7 @@ def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for 
     edge_index_sampled = edge_index_sampled[:, np.lexsort((edge_index_sampled[1], edge_index_sampled[0]))]
 
     # step 4: convert to tensor and change the device
-    edge_index_sampled = torch.from_numpy(edge_index_sampled).to(get_device())
+    edge_index_sampled = torch.from_numpy(edge_index_sampled).to(device)
 
     return edge_index_sampled[:2, :].int(), edge_index_sampled[2].int()  # edge_index, indices
 
@@ -321,7 +312,7 @@ def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_repl
 def get_edge_match_indices(edge_index):  # for undirected graphs only
     edge_index_cloned = edge_index.clone()
 
-    indices = torch.arange(0, edge_index_cloned.size(1)).reshape(1, -1).squeeze().to(get_device())
+    indices = torch.arange(0, edge_index_cloned.size(1)).reshape(1, -1).squeeze().to(device)
     edge_index_cloned = torch.vstack((edge_index_cloned, indices))  # add indices of each column
 
     src = edge_index_cloned[:, edge_index_cloned[0, :] < edge_index_cloned[1, :]]
@@ -343,7 +334,7 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
 
     # batch sizes
     quotient, remainder = num_edges // num_batches, num_edges % num_batches
-    batch_sizes = torch.zeros((num_batches,), dtype=torch.int64).to(get_device())
+    batch_sizes = torch.zeros((num_batches,), dtype=torch.int64).to(device)
     batch_sizes += quotient
     batch_sizes[:remainder] += 1
 
@@ -366,9 +357,12 @@ def classify(y: torch.Tensor, classes: list | torch.Tensor = [0, 1]):
     def get_class(value):
         return min(classes, key=lambda x: abs(x - value))
 
-    y_clone = y.clone().to(DeviceType.CPU.value)
+    y_clone = y.clone().to('cpu')
 
-    return y_clone.apply_(get_class).to(get_device())
+    return y_clone.apply_(get_class).to(device)
+
+
+""" save run results """
 
 
 def create_summary_writer(settings) -> SummaryWriter:
@@ -401,22 +395,38 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results
         writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
 
 
-def save_model(model, settings):
-    base_path = '../saved_models'
+""" save and load the model """
 
+
+def get_model_path(settings):
+    run_details = f'e{settings["epochs"]}' \
+                  + f'-b{settings["num_batches"]}' \
+                  + f'-lr{settings["learning_rate"]}' \
+                  + f'-pos{settings["pos_sampling_rate"]}' \
+                  + f'-neg{settings["neg_sampling_rate"]}'
+
+    path = os.path.join('../saved_models', settings["run_name"], run_details)
+
+    return path
+
+
+def save_model(model, settings):
     model_name = f'{settings["model_name"]}.pth'
 
-    run_details = f'e{settings["epochs"]}'\
-        + f'-b{settings["num_batches"]}'\
-        + f'-lr{settings["learning_rate"]}'\
-        + f'-pos{settings["pos_sampling_rate"]}'\
-        + f'-neg{settings["neg_sampling_rate"]}'
-
-    path = os.path.join(base_path, settings["run_name"], run_details)
-
+    path = get_model_path(settings)
     if not os.path.exists(path):
         os.makedirs(path)
-
     path = os.path.join(path, model_name)
 
-    torch.save(obj=model, f=path)
+    torch.save(obj=model.state_dict(), f=path)
+
+
+def load_model(model, settings):
+    model_name = f'{settings["model_name"]}.pth'
+
+    path = get_model_path(settings)
+    path = os.path.join(path, model_name)
+
+    model.load_state_dict(torch.load(path, map_location=device))
+
+    return model

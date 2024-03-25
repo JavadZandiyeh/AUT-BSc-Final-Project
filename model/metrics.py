@@ -59,7 +59,7 @@ def ndcg_at_k(users, edge_index, y_pred, y, k=10):
         k_adjusted = min(k, int(edge_mask_user.sum()))
 
         if k_adjusted > 0:
-            d = torch.arange(2, k_adjusted + 2).log2().to(utils.get_device())  # discount
+            d = torch.arange(2, k_adjusted + 2).log2().to(utils.device)  # discount
 
             y_pred_user, y_user = y_pred[edge_mask_user], y[edge_mask_user]
 

@@ -1,5 +1,6 @@
 import configparser
 import os
+import pprint
 
 import torch
 
@@ -7,50 +8,49 @@ import engine
 import models
 import utils
 
+os.environ['TORCH'] = torch.__version__
+
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-device = utils.get_device()
-os.environ['TORCH'] = torch.__version__
+phase = config.get('run', 'phase')
 
-# Setup dataset
-data_base_path = config.get('dataset', 'imdb_1m_path')
-data = torch.load(f'{data_base_path}/data.pt')
-data = data.to(device)
-
-settings = {
-    'model_name': config.get('model', 'model_name'),
-    'epochs': config.getint('model', 'epochs'),
-    'learning_rate': config.getfloat('model', 'learning_rate'),
-    'num_batches': config.getint('model', 'num_batches'),
-    'pos_sampling_rate': config.getfloat('model', 'pos_sampling_rate'),
-    'neg_sampling_rate': config.getfloat('model', 'neg_sampling_rate'),
-    'run_name': config.get('writer', 'run_name')
-}
+data_path = config.get('run', 'data_path')
+data = torch.load(data_path).to(utils.device)
 
 
-def get_model():
+def get_model(model_name):
     channel = data.num_node_features
 
-    if settings['model_name'] == 'GATv2ConvModel':
-        _model = models.GATv2ConvModel(
+    if model_name == 'GATv2ConvModel':
+        model = models.GATv2ConvModel(
             channels=[channel, channel, channel]
         )
     else:
-        _model = models.BigraphModel(
+        model = models.BigraphModel(
             channels_ii=[channel, channel, channel],
             channels_uiu=[channel, channel, channel]
         )
 
-    return _model
+    return model
 
 
-if __name__ == '__main__':
-    model = get_model().to(device)
+def get_settings(section):
+    settings = {
+        'run_name': config.get(section, 'run_name'),
+        'model_name': config.get(section, 'model_name'),
+        'epochs': config.getint(section, 'epochs'),
+        'learning_rate': config.getfloat(section, 'learning_rate'),
+        'num_batches': config.getint(section, 'num_batches'),
+        'pos_sampling_rate': config.getfloat(section, 'pos_sampling_rate'),
+        'neg_sampling_rate': config.getfloat(section, 'neg_sampling_rate')
+    }
 
+    return settings
+
+
+def train(model, loss_fn, settings):
     optimizer = torch.optim.Adam(model.parameters(), lr=settings['learning_rate'])
-
-    loss_fn = torch.nn.MSELoss().to(device)
 
     writer = utils.create_summary_writer(settings)
 
@@ -59,3 +59,22 @@ if __name__ == '__main__':
     writer.close()
 
     utils.save_model(model, settings)
+
+
+def test(model, loss_fn, settings):
+    model = utils.load_model(model, settings)
+
+    test_results = engine.eval_step(model, data, loss_fn, utils.EngineSteps.TEST)
+
+    pprint.pprint(test_results)
+
+
+if __name__ == '__main__':
+    _settings = get_settings(phase)
+    _model = get_model(_settings['model_name']).to(utils.device)
+    _loss_fn = torch.nn.MSELoss().to(utils.device)
+
+    if phase == 'train':
+        train(_model, _loss_fn, _settings)
+    else:
+        test(_model, _loss_fn, _settings)
