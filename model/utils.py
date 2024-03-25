@@ -83,11 +83,11 @@ def get_device():
     return device
 
 
-def edge_prediction(h, edge_index):
-    h_j = torch.index_select(h, 0, edge_index[0])
-    h_i = torch.index_select(h, 0, edge_index[1])
+def edge_prediction(x, edge_index):
+    x_j = torch.index_select(x, 0, edge_index[0])
+    x_i = torch.index_select(x, 0, edge_index[1])
 
-    return torch.nn.functional.cosine_similarity(h_j, h_i, dim=1)
+    return torch.nn.functional.cosine_similarity(x_j, x_i, dim=1)
 
 
 def get_tensor_distribution(shape, _type: DistType = None):
@@ -210,7 +210,7 @@ def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for 
     return edge_index_sampled[:2, :].int(), edge_index_sampled[2].int()  # edge_index, indices
 
 
-def train_val_test(edge_index):  # for undirected graphs only
+def train_val_test_division(edge_index):  # for undirected graphs only
     num_edges = round(edge_index.size(1) / 2)
 
     num_train = round(num_edges * 0.8)
@@ -282,7 +282,7 @@ def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_repl
         neg_edge_mask_ii = torch.zeros_like(neg_edge_index_uiu[0])
         neg_edge_attr = torch.zeros_like(neg_edge_index_uiu[0])
         neg_y = torch.zeros_like(neg_edge_index_uiu[0])
-        neg_edge_mask_train, neg_edge_mask_val, neg_edge_mask_test = train_val_test(neg_edge_index_uiu)
+        neg_edge_mask_train, neg_edge_mask_val, neg_edge_mask_test = train_val_test_division(neg_edge_index_uiu)
 
         cdata_stacked = torch.vstack((
             cdata.edge_index, cdata.edge_mask_uiu, cdata.edge_mask_ii, cdata.edge_attr, cdata.y, cdata.edge_mask_train,
@@ -362,16 +362,27 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     return batches  # indices of edge_index
 
 
-def create_summary_writer(model_name, settings) -> SummaryWriter:
-    model_details = f'e{settings["epochs"]}'\
+def classify(y: torch.Tensor, classes: list | torch.Tensor = [0, 1]):
+    def get_class(value):
+        return min(classes, key=lambda x: abs(x - value))
+
+    y_clone = y.clone().to(DeviceType.CPU.value)
+
+    return y_clone.apply_(get_class).to(get_device())
+
+
+def create_summary_writer(settings) -> SummaryWriter:
+    base_path = '../runs'
+
+    run_details = f'e{settings["epochs"]}'\
         + f'-b{settings["num_batches"]}'\
         + f'-lr{settings["learning_rate"]}'\
         + f'-pos{settings["pos_sampling_rate"]}'\
         + f'-neg{settings["neg_sampling_rate"]}'
 
-    log_dir = os.path.join('../runs', model_name, settings["run_name"], model_details)
+    path = os.path.join(base_path, settings['run_name'], run_details, settings['model_name'])
 
-    return SummaryWriter(log_dir=log_dir)
+    return SummaryWriter(log_dir=path)
 
 
 def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results):
@@ -390,13 +401,22 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results
         writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
 
 
-def classify(y: torch.Tensor, classes: list | torch.Tensor = None):
-    if classes is None:
-        classes = [0, 0.25, 0.5, 0.75, 1]
+def save_model(model, settings):
+    base_path = '../saved_models'
 
-    def get_class(value):
-        return min(classes, key=lambda x: abs(x - value))
+    model_name = f'{settings["model_name"]}.pth'
 
-    y_clone = y.clone().to(DeviceType.CPU.value)
+    run_details = f'e{settings["epochs"]}'\
+        + f'-b{settings["num_batches"]}'\
+        + f'-lr{settings["learning_rate"]}'\
+        + f'-pos{settings["pos_sampling_rate"]}'\
+        + f'-neg{settings["neg_sampling_rate"]}'
 
-    return y_clone.apply_(get_class).to(get_device())
+    path = os.path.join(base_path, settings["run_name"], run_details)
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    path = os.path.join(path, model_name)
+
+    torch.save(obj=model.state_dict(), f=path)

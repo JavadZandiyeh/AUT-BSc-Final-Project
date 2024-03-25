@@ -19,6 +19,7 @@ data = torch.load(f'{data_base_path}/data.pt')
 data = data.to(device)
 
 settings = {
+    'model_name': config.get('model', 'model_name'),
     'epochs': config.getint('model', 'epochs'),
     'learning_rate': config.getfloat('model', 'learning_rate'),
     'num_batches': config.getint('model', 'num_batches'),
@@ -27,26 +28,33 @@ settings = {
     'run_name': config.get('writer', 'run_name')
 }
 
-if __name__ == '__main__':
+
+def get_model():
     channel = data.num_node_features
 
-    # case 0
-    # model = model_builder.BigraphModel(
-    #     channels_ii=[channel, channel, channel],
-    #     channels_uiu=[channel, channel, channel]
-    # )
+    if settings['model_name'] == 'GATv2ConvModel':
+        _model = models.GATv2ConvModel([channel, channel, channel])
+    else:
+        _model = models.BigraphModel(
+            channels_ii=[channel, channel, channel],
+            channels_uiu=[channel, channel, channel]
+        )
 
+    return _model
+
+
+if __name__ == '__main__':
     # case 1
-    model = models.GATv2ConvModel([channel, channel, channel])
-
-    model = model.to(device)
+    model = get_model().to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=settings['learning_rate'])
 
     loss_fn = torch.nn.MSELoss().to(device)
 
-    writer = utils.create_summary_writer(model._get_name(), settings)
+    writer = utils.create_summary_writer(settings)
 
     engine.start(model, data, optimizer, loss_fn, writer, settings)
 
     writer.close()
+
+    utils.save_model(model, settings)
