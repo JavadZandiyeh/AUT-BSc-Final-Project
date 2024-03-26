@@ -1,4 +1,6 @@
+dataset
+main/__pycache__
 .idea/
 .DS_Store
 runs
-saved_models
+models
