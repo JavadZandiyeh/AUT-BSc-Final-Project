@@ -1,4 +1,4 @@
-dataset/imdb/crawl
+dataset
 main/__pycache__
 .idea/
 .DS_Store
