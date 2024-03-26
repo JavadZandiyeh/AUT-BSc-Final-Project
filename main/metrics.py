@@ -66,8 +66,8 @@ def ndcg_at_k(users, edge_index, y_pred, y, k=10):
             _, topk_y_pred_user_indices = torch.topk(y_pred_user, k_adjusted)
             topk_y_user, _ = torch.topk(y_user, k_adjusted)
 
-            dcg_y_pred_user = (y_user[topk_y_pred_user_indices] / d).sum()  # discount cumulative gain (predicted)
-            dcg_y_user = (topk_y_user / d).sum()  # discount cumulative gain (normal)
+            dcg_y_pred_user = ((2**y_user[topk_y_pred_user_indices]) / d).sum()  # discount cumulative gain (predicted)
+            dcg_y_user = ((2**topk_y_user) / d).sum()  # discount cumulative gain (normal)
 
             # normalized discount cumulative gain
             if dcg_y_user > 0:

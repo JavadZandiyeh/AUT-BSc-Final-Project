@@ -26,6 +26,13 @@ def get_model(model_name):
         model = models.GATv2ConvModel(
             channels=[channel, channel, channel]
         )
+    elif model_name == 'LightGCNModel':
+        model = models.LightGCNModel(
+            num_nodes=data.num_nodes,
+            embedding_dim=channel,
+            num_layers=3,
+            alpha=None
+        )
     else:
         model = models.BigraphModel(
             channels_ii=[channel, channel, channel],
@@ -49,7 +56,7 @@ def get_settings(section):
     return settings
 
 
-def train(model, loss_fn, settings):
+def start_train(model, loss_fn, settings):
     optimizer = torch.optim.Adam(model.parameters(), lr=settings['learning_rate'])
 
     writer = utils.create_summary_writer(settings)
@@ -61,7 +68,7 @@ def train(model, loss_fn, settings):
     utils.save_model(model, settings)
 
 
-def test(model, loss_fn, settings):
+def start_test(model, loss_fn, settings):
     model = utils.load_model(model, settings)
 
     test_results = engine.eval_step(model, data, loss_fn, utils.EngineSteps.TEST)
@@ -75,6 +82,6 @@ if __name__ == '__main__':
     _loss_fn = torch.nn.MSELoss().to(utils.device)
 
     if phase == 'train':
-        train(_model, _loss_fn, _settings)
+        start_train(_model, _loss_fn, _settings)
     else:
-        test(_model, _loss_fn, _settings)
+        start_test(_model, _loss_fn, _settings)

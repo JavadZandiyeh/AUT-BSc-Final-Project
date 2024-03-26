@@ -138,6 +138,34 @@ class GATv2ConvModel(torch.nn.Module):
 
         # forward over layers
         for layer in self.layers:
-            h = layer(h, edge_index, edge_attr)
+            h = layer(x=h, edge_index=edge_index, edge_attr=edge_attr)
+
+        return h
+
+
+class LightGCNModel(torch.nn.Module):
+    def __init__(self, num_nodes, embedding_dim, num_layers, alpha):
+        super().__init__()
+
+        self.light_gcn = pyg.nn.LightGCN(
+            num_nodes=num_nodes,
+            embedding_dim=embedding_dim,
+            num_layers=num_layers,
+            alpha=alpha
+        )
+
+    def forward(self, data):
+        # prepare required variables
+        edge_index = data.edge_index[:, data.edge_mask_train]
+        edge_attr = data.edge_attr[data.edge_mask_train]
+        h = data.x.clone()
+
+        self.light_gcn.embedding = torch.nn.Embedding(
+            num_embeddings=self.num_nodes,
+            embedding_dim=self.embedding_dim,
+            _weight=h
+        )
+
+        h = self.light_gcn.get_embedding(edge_index=edge_index, edge_weight=edge_attr)
 
         return h
