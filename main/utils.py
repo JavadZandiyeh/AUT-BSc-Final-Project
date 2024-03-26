@@ -395,7 +395,7 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results
         writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
 
 
-""" save and load the model """
+""" save and load the main """
 
 
 def get_model_path(settings):
@@ -405,7 +405,7 @@ def get_model_path(settings):
                   + f'-pos{settings["pos_sampling_rate"]}' \
                   + f'-neg{settings["neg_sampling_rate"]}'
 
-    path = os.path.join('../saved_models', settings["run_name"], run_details)
+    path = os.path.join('../models', settings["run_name"], run_details)
 
     return path
 
