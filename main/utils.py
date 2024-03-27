@@ -259,22 +259,38 @@ def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_repl
     neg_rate = max(0.0, neg_rate)
 
     if neg and (neg_rate > 0.0):
-        edge_index_uiu = cdata.edge_index[:, cdata.edge_mask_uiu]
+        edge_index_train = cdata.edge_index[:, cdata.edge_mask_train]
 
-        neg_edge_index_uiu = neg_edge_sampling(edge_index_uiu, rate=neg_rate)
+        neg_edge_index_uiu = neg_edge_sampling(edge_index_train, rate=neg_rate)
         neg_edge_mask_uiu = torch.ones_like(neg_edge_index_uiu[0])
         neg_edge_mask_ii = torch.zeros_like(neg_edge_index_uiu[0])
         neg_edge_attr = torch.zeros_like(neg_edge_index_uiu[0])
         neg_y = torch.zeros_like(neg_edge_index_uiu[0])
-        neg_edge_mask_train, neg_edge_mask_val, neg_edge_mask_test = train_val_test_division(neg_edge_index_uiu)
+        neg_edge_mask_train = torch.ones_like(neg_edge_index_uiu[0])
+        neg_edge_mask_val = torch.zeros_like(neg_edge_index_uiu[0])
+        neg_edge_mask_test = torch.zeros_like(neg_edge_index_uiu[0])
 
         cdata_stacked = torch.vstack((
-            cdata.edge_index, cdata.edge_mask_uiu, cdata.edge_mask_ii, cdata.edge_attr, cdata.y, cdata.edge_mask_train,
-            cdata.edge_mask_val, cdata.edge_mask_test))
+            cdata.edge_index,
+            cdata.edge_mask_uiu,
+            cdata.edge_mask_ii,
+            cdata.edge_attr,
+            cdata.y,
+            cdata.edge_mask_train,
+            cdata.edge_mask_val,
+            cdata.edge_mask_test
+        ))
 
         neg_cdata_stacked = torch.vstack((
-            neg_edge_index_uiu, neg_edge_mask_uiu, neg_edge_mask_ii, neg_edge_attr, neg_y, neg_edge_mask_train,
-            neg_edge_mask_val, neg_edge_mask_test))
+            neg_edge_index_uiu,
+            neg_edge_mask_uiu,
+            neg_edge_mask_ii,
+            neg_edge_attr,
+            neg_y,
+            neg_edge_mask_train,
+            neg_edge_mask_val,
+            neg_edge_mask_test
+        ))
 
         stack = torch.hstack((cdata_stacked, neg_cdata_stacked))
         stack_sorted_indices = lexsort_tensor((stack[1], stack[0]))
