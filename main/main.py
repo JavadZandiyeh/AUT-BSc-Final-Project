@@ -24,19 +24,19 @@ def get_model(model_name):
 
     if model_name == 'GATv2ConvModel':
         model = models.GATv2ConvModel(
-            channels=[channel, channel, channel]
+            channels=[channel, channel, channel, channel]
         )
     elif model_name == 'LightGCNModel':
         model = models.LightGCNModel(
             num_nodes=data.num_nodes,
             embedding_dim=channel,
             num_layers=3,
-            alpha=None
+            embedding=data.x
         )
     else:
         model = models.BigraphModel(
-            channels_ii=[channel, channel, channel],
-            channels_uiu=[channel, channel, channel]
+            channels_ii=[channel, channel, channel, channel],
+            channels_uiu=[channel, channel, channel, channel]
         )
 
     return model

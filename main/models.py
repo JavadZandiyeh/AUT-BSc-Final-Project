@@ -144,7 +144,7 @@ class GATv2ConvModel(torch.nn.Module):
 
 
 class LightGCNModel(torch.nn.Module):
-    def __init__(self, num_nodes, embedding_dim, num_layers, alpha):
+    def __init__(self, num_nodes, embedding_dim, num_layers, alpha=None, embedding=None):
         super().__init__()
 
         self.light_gcn = pyg.nn.LightGCN(
@@ -154,17 +154,17 @@ class LightGCNModel(torch.nn.Module):
             alpha=alpha
         )
 
+        if embedding is not None:
+            self.light_gcn.embedding = torch.nn.Embedding(
+                num_embeddings=num_nodes,
+                embedding_dim=embedding_dim,
+                _weight=embedding
+            )
+
     def forward(self, data):
         # prepare required variables
         edge_index = data.edge_index[:, data.edge_mask_train]
         edge_attr = data.edge_attr[data.edge_mask_train]
-        h = data.x.clone()
-
-        self.light_gcn.embedding = torch.nn.Embedding(
-            num_embeddings=h.size(0),
-            embedding_dim=h.size(1),
-            _weight=h
-        )
 
         h = self.light_gcn.get_embedding(edge_index=edge_index, edge_weight=edge_attr)
 
