@@ -36,20 +36,13 @@ class EngineSteps(ExtendedEnum):
 
 class Metrics(ExtendedEnum):
     MSELOSS = 'MSELoss'  # Mean Squared Error Loss
-    P_AT_K = 'P@K'  # Precision at K
-    R_AT_K = 'R@K'  # Recall at K
-    FScore = 'FScore'  # F Score
-    NDCG_AT_K = 'NDCG@K'  # Normalized Discount Cumulative Gain at K
-    # MRR = 'MRR'  # Mean Reciprocal Rank
-    # MAP = 'MAP'  # Mean Average Precision
+    MAP = 'MAP'  # Mean Average Precision
+    NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
+    MRR = 'MRR'  # Mean Reciprocal Rank
     # PRU = 'PRU'  # Preference Ranking Utility
     # PRI = 'PRI'  # Preference Ranking Index
-    # HR = 'HR'  # Hit Rate
-    # ACCURACY = 'Accuracy'
-    # PRECISION = 'Precision'
-    # RECALL = 'Recall'
-    # Coverage = 'Coverage'
-    # Novelty = 'Novelty'
+    # R_AT_K = 'R_AT_K'  # Recall at K
+    # FScore = 'FScore'  # F-beta Score
 
 
 def get_edge_att(x, edge_index, edge_attr):
@@ -362,7 +355,7 @@ def classify(y: torch.Tensor, classes: list | torch.Tensor = [0, 1]):
     return y_clone.apply_(get_class).to(device)
 
 
-""" save run results """
+""" save results """
 
 
 def create_summary_writer(settings) -> SummaryWriter:
@@ -395,7 +388,7 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results
         writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
 
 
-""" save and load the main """
+""" save and load the model """
 
 
 def get_model_path(settings):
