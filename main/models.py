@@ -161,8 +161,8 @@ class LightGCNModel(torch.nn.Module):
         h = data.x.clone()
 
         self.light_gcn.embedding = torch.nn.Embedding(
-            num_embeddings=self.num_nodes,
-            embedding_dim=self.embedding_dim,
+            num_embeddings=h.size(0),
+            embedding_dim=h.size(1),
             _weight=h
         )
 
