@@ -129,7 +129,7 @@ def lexsort_tensor(tup):
     return indices
 
 
-def neg_edge_sampling(edge_index, num_neg_samples=1, rate=1.0):  # for undirected graphs only
+def neg_edge_sampling(edge_index, num_neg_samples=None, rate=1.0):  # for undirected graphs only
     bipartite, s1, s2 = is_bipartite(edge_index)  # s1 is the set of users, and s2 is the set of items
 
     if bipartite:  # degree-based negative sampling for the bipartite graph
@@ -141,9 +141,10 @@ def neg_edge_sampling(edge_index, num_neg_samples=1, rate=1.0):  # for undirecte
             neighbors = set(adj_dict.get(node))
             non_neighbors = s2 - neighbors
 
-            num_neg_samples = min(round(len(neighbors) * rate), len(non_neighbors))
+            num_neg_samples_node = round(len(neighbors) * rate) if (num_neg_samples is None) else num_neg_samples
+            num_neg_samples_node = min(num_neg_samples_node,  len(non_neighbors))
 
-            neg_neighbors = random.sample(non_neighbors, num_neg_samples)
+            neg_neighbors = random.sample(non_neighbors, num_neg_samples_node)
 
             for neg_neighbor in neg_neighbors:
                 neg_edge_index.append([node, neg_neighbor])
@@ -153,6 +154,9 @@ def neg_edge_sampling(edge_index, num_neg_samples=1, rate=1.0):  # for undirecte
     else:
         edge_index_src = edge_index[:, edge_index[0, :] < edge_index[1, :]]
         num_nodes = len(torch.unique(edge_index_src))
+
+        if num_neg_samples is None:
+            num_neg_samples = 1
 
         neg_edge_index1 = pyg.utils.negative_sampling(edge_index_src, num_nodes, num_neg_samples)
         neg_edge_index2 = torch.vstack((neg_edge_index1[1], neg_edge_index1[0]))
