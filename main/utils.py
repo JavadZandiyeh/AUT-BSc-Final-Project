@@ -9,7 +9,6 @@ import networkx as nx
 import enum
 from torch.utils.tensorboard.writer import SummaryWriter
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -35,14 +34,18 @@ class EngineSteps(ExtendedEnum):
 
 
 class Metrics(ExtendedEnum):
-    MSELOSS = 'MSELoss'  # Mean Squared Error Loss
     MAP = 'MAP'  # Mean Average Precision
-    NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
     MRR = 'MRR'  # Mean Reciprocal Rank
+    NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
+    R_AT_K = 'R_AT_K'  # Recall at K
+    FScore = 'FScore'  # F-beta Score
     # PRU = 'PRU'  # Preference Ranking Utility
     # PRI = 'PRI'  # Preference Ranking Index
-    # R_AT_K = 'R_AT_K'  # Recall at K
     # FScore = 'FScore'  # F-beta Score
+
+
+def init_metrics(value=0):
+    return {metric: value for metric in Metrics.list()}
 
 
 def get_edge_att(x, edge_index, edge_attr):
@@ -72,6 +75,20 @@ def edge_prediction(x, edge_index):
     x_i = torch.index_select(x, 0, edge_index[1])
 
     return torch.nn.functional.cosine_similarity(x_j, x_i, dim=1)
+
+
+def get_neighbors(node, edge_index):
+    src, trg = edge_index[0].eq(node), edge_index[1].eq(node)
+
+    neighbors = set(edge_index[1, src].tolist() + edge_index[0, trg].tolist())
+
+    return neighbors
+
+
+def get_edge_mask_node(node, edge_index):
+    node_mask = edge_index[0].eq(node) | edge_index[1].eq(node)
+
+    return node_mask
 
 
 def get_tensor_distribution(shape, _type: DistType = None):
@@ -129,20 +146,48 @@ def lexsort_tensor(tup):
     return indices
 
 
+def train_val_test_division(edge_index):  # for undirected graphs only
+    num_edges = round(edge_index.size(1) / 2)
+
+    num_train = round(num_edges * 0.8)
+    num_val = round((num_edges - num_train) * 0.5)
+    num_test = num_edges - num_train - num_val
+
+    mask = torch.zeros_like(edge_index[0])
+
+    _, val_indices = pos_edge_sampling(edge_index, num_val)
+    mask[val_indices] = 1
+
+    train_test_indices = torch.nonzero(mask.eq(0)).T.squeeze()
+    _, test_indices = pos_edge_sampling(edge_index[:, train_test_indices], num_test)
+    test_indices = train_test_indices[test_indices]
+    mask[test_indices] = 2
+
+    train_mask = torch.zeros_like(edge_index[0])
+    train_mask[torch.nonzero(mask.eq(0)).T.squeeze()] = 1
+
+    val_mask = torch.zeros_like(edge_index[0])
+    val_mask[torch.nonzero(mask.eq(1)).T.squeeze()] = 1
+
+    test_mask = torch.zeros_like(edge_index[0])
+    test_mask[torch.nonzero(mask.eq(2)).T.squeeze()] = 1
+
+    return train_mask.bool(), val_mask.bool(), test_mask.bool()
+
+
 def neg_edge_sampling(edge_index, num_neg_samples=None, rate=1.0):  # for undirected graphs only
     bipartite, s1, s2 = is_bipartite(edge_index)  # s1 is the set of users, and s2 is the set of items
 
     if bipartite:  # degree-based negative sampling for the bipartite graph
         rate = max(0.0, rate)
-        adj_dict = get_adj_dict(edge_index)
         neg_edge_index = list()
 
         for node in s1:
-            neighbors = set(adj_dict.get(node))
+            neighbors = get_neighbors(node, edge_index)
             non_neighbors = s2 - neighbors
 
             num_neg_samples_node = round(len(neighbors) * rate) if (num_neg_samples is None) else num_neg_samples
-            num_neg_samples_node = min(num_neg_samples_node,  len(non_neighbors))
+            num_neg_samples_node = min(num_neg_samples_node, len(non_neighbors))
 
             neg_neighbors = random.sample(non_neighbors, num_neg_samples_node)
 
@@ -158,9 +203,7 @@ def neg_edge_sampling(edge_index, num_neg_samples=None, rate=1.0):  # for undire
         if num_neg_samples is None:
             num_neg_samples = 1
 
-        neg_edge_index1 = pyg.utils.negative_sampling(edge_index_src, num_nodes, num_neg_samples)
-        neg_edge_index2 = torch.vstack((neg_edge_index1[1], neg_edge_index1[0]))
-        neg_edge_index = torch.hstack((neg_edge_index1, neg_edge_index2))
+        neg_edge_index = pyg.utils.negative_sampling(edge_index_src, num_nodes, num_neg_samples, force_undirected=True)
 
     neg_edge_index = neg_edge_index[:, lexsort_tensor((neg_edge_index[1], neg_edge_index[0]))]
 
@@ -196,35 +239,6 @@ def pos_edge_sampling(edge_index, num_pos_samples=1, replacement=False):  # for 
     edge_index_sampled = torch.from_numpy(edge_index_sampled).to(device)
 
     return edge_index_sampled[:2, :].int(), edge_index_sampled[2].int()  # edge_index, indices
-
-
-def train_val_test_division(edge_index):  # for undirected graphs only
-    num_edges = round(edge_index.size(1) / 2)
-
-    num_train = round(num_edges * 0.8)
-    num_val = round((num_edges - num_train) * 0.5)
-    num_test = num_edges - num_train - num_val
-
-    mask = torch.zeros_like(edge_index[0])
-
-    _, val_indices = pos_edge_sampling(edge_index, num_val)
-    mask[val_indices] = 1
-
-    train_test_indices = torch.nonzero(mask.eq(0)).T.squeeze()
-    _, test_indices = pos_edge_sampling(edge_index[:, train_test_indices], num_test)
-    test_indices = train_test_indices[test_indices]
-    mask[test_indices] = 2
-
-    train_mask = torch.zeros_like(edge_index[0])
-    train_mask[torch.nonzero(mask.eq(0)).T.squeeze()] = 1
-
-    val_mask = torch.zeros_like(edge_index[0])
-    val_mask[torch.nonzero(mask.eq(1)).T.squeeze()] = 1
-
-    test_mask = torch.zeros_like(edge_index[0])
-    test_mask[torch.nonzero(mask.eq(2)).T.squeeze()] = 1
-
-    return train_mask.bool(), val_mask.bool(), test_mask.bool()
 
 
 def edge_sampling(data, pos_rate=0.7, neg_rate=1.0, pos=True, neg=True, pos_replacement=False):  # for undirected graphs only
@@ -366,49 +380,32 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     return batches  # indices of edge_index
 
 
-def classify(y: torch.Tensor, classes: list | torch.Tensor = [0, 1]):
-    def get_class(value):
-        return min(classes, key=lambda x: abs(x - value))
-
-    y_clone = y.clone().to('cpu')
-
-    return y_clone.apply_(get_class).to(device)
-
-
-""" save results """
-
-
 def create_summary_writer(settings) -> SummaryWriter:
     base_path = '../runs'
 
-    run_details = f'e{settings["epochs"]}'\
-        + f'-b{settings["num_batches"]}'\
-        + f'-lr{settings["learning_rate"]}'\
-        + f'-pos{settings["pos_sampling_rate"]}'\
-        + f'-neg{settings["neg_sampling_rate"]}'
+    run_details = f'e{settings["epochs"]}' \
+                  + f'-b{settings["num_batches"]}' \
+                  + f'-lr{settings["learning_rate"]}' \
+                  + f'-pos{settings["pos_sampling_rate"]}' \
+                  + f'-neg{settings["neg_sampling_rate"]}'
 
     path = os.path.join(base_path, settings['run_name'], run_details, settings['model_name'])
 
     return SummaryWriter(log_dir=path)
 
 
-def epoch_summary_write(writer: SummaryWriter, epoch, train_results, val_results):
+def epoch_summary_write(writer: SummaryWriter, epoch, train_loss, val_loss, val_results):
     # results
-    results = {metric: {'train': 0, 'val': 0} for metric in Metrics.list()}
-
-    for step, step_results in [('train', train_results), ('val', val_results)]:
-        for metric, value in step_results.items():
-            results[metric][step] = value
+    val_results = {metric: {'val': value} for metric, value in val_results}
+    loss_results = {'loss': {'train': train_loss, 'val': val_loss}}
+    results = val_results | loss_results
 
     # terminal
     pprint.pprint(results)
 
     # writer
-    for metric, metric_results in results.items():
-        writer.add_scalars(main_tag=metric, tag_scalar_dict=metric_results, global_step=epoch)
-
-
-""" save and load the model """
+    for metric, result in results.items():
+        writer.add_scalars(main_tag=metric, tag_scalar_dict=result, global_step=epoch)
 
 
 def get_model_path(settings):

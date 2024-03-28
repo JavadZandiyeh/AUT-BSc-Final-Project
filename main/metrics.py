@@ -1,138 +1,163 @@
 import torch
 from utils import Metrics
 import utils
+import random
 
 
-def init_metrics(value=0):
-    return {metric: value for metric in Metrics.list()}
+class MetricsCalculation:
+    def __init__(self, data, h, edge_mask_eval):
+        self.data = data
+        self.h = h
+        self.edge_mask_eval = edge_mask_eval
 
+        self.users = set(data.node_mask_user.nonzero().squeeze().tolist())
+        self.items = set(data.node_mask_item.nonzero().squeeze().tolist())
 
-def _map(users, edge_index, y_pred, y_rel, k=None):
-    __map, num_users = 0, 0
+        self.y_pred = utils.edge_prediction(h, data.edge_index) * data.edge_mask_uiu
 
-    for user in users:
-        edge_mask_user = edge_index[0].eq(user)
+    def item_recom_sampling(self, user, weight=4):
+        """ sampling items for the user to evaluate our recommender system """
+        edge_mask_user = self.data.edge_index[0].eq(user)  # edge in one direction
+        edge_mask_user_train = edge_mask_user * self.data.edge_mask_train
+        edge_mask_user_eval = edge_mask_user * self.edge_mask_eval
 
-        num_neighbors = int(edge_mask_user.sum())
-        k_adjusted = num_neighbors if (k is None) else min(k, num_neighbors)
+        # ground truth
+        y_pred_user_eval, y_user_eval = self.y_pred[edge_mask_user_eval], self.data.y[edge_mask_user_eval]
 
-        if k_adjusted > 0:
-            y_pred_user, y_rel_user = y_pred[edge_mask_user], y_rel[edge_mask_user]
+        # sample
+        edge_index_user_train = self.data.edge_index[:, edge_mask_user_train]
+        edge_index_user_eval = self.data.edge_index[:, edge_mask_user_eval]
 
-            topk_indices = torch.topk(y_pred_user, k_adjusted)[1]
+        train_items = utils.get_neighbors(user, edge_index_user_train)
+        eval_items = utils.get_neighbors(user, edge_index_user_eval)
+        other_items = self.items - train_items - eval_items
 
-            pred = y_rel_user[topk_indices]
+        num_samples = min(round(weight * len(eval_items)), len(other_items))
+        sampled_items = random.sample(other_items, num_samples)
+
+        edge_index_user_sample = torch.tensor(
+            [[user] * num_samples, sampled_items],
+            dtype=edge_index_user_train.dtype
+        ).to(utils.device)
+
+        y_pred_user_sample = utils.edge_prediction(self.h, edge_index_user_sample)
+        y_user_sample = torch.zeros_like(y_pred_user_sample)
+
+        # concat samples and ground truth
+        y_pred_user_sample = torch.hstack((y_pred_user_sample, y_pred_user_eval))  # predicted
+        y_user_sample = torch.hstack((y_user_sample, y_user_eval))  # actual
+        edge_index_user_sample = torch.hstack((edge_index_user_sample, edge_index_user_eval))  # edge_index
+
+        return edge_index_user_sample, y_pred_user_sample, y_user_sample
+
+    def get_results(self):
+        results = utils.init_metrics(0)
+
+        results[Metrics.MAP.value] = self.get_map()
+        results[Metrics.MRR.value] = self.get_mrr()
+        results[Metrics.NDCG.value] = self.get_ndcg()
+        results[Metrics.R_AT_K.value] = self.get_r_at_k()
+        results[Metrics.FScore.value] = self.get_f_score(results[Metrics.MAP.value], results[Metrics.R_AT_K.value])
+
+        return results
+
+    def get_map(self, weight=4):  # Mean Average Precision
+        _map, num_users = 0, 0
+
+        for user in self.users:
+            _, y_pred_user_sample, y_user_sample = self.item_recom_sampling(user, weight)
+
+            if (num_samples := y_user_sample.numel()) == 0:
+                continue
+
+            k = round(num_samples / (weight + 1))
+            topk_indices = torch.topk(y_pred_user_sample, k)[1]
+            pred = y_user_sample[topk_indices]
             true_pred_indices = pred.nonzero().squeeze()
             true_pred_count = true_pred_indices.numel()
             pred[true_pred_indices] = torch.arange(1, true_pred_count + 1, dtype=pred.dtype).to(utils.device)
-            pred /= torch.arange(1, k_adjusted + 1, dtype=pred.dtype).to(utils.device)
+            pred /= torch.arange(1, k + 1, dtype=pred.dtype).to(utils.device)
+            _map_user = pred.sum() / max(1, true_pred_count)
 
-            __map += pred.sum() / max(1, true_pred_count)
+            _map += _map_user
             num_users += 1
 
-    __map /= max(1, num_users)
+        _map /= num_users
 
-    return float(__map)
+        return float(_map)
 
+    def get_mrr(self, weight=4):
+        mrr, num_users = 0, 0
 
-def r_at_k(users, edge_index, y_pred, y_rel, k=None):
-    _r_at_k, num_users = 0, 0
+        for user in self.users:
+            _, y_pred_user_sample, y_user_sample = self.item_recom_sampling(user, weight)
 
-    for user in users:
-        edge_mask_user = edge_index[0].eq(user)
+            if (num_samples := y_user_sample.numel()) == 0:
+                continue
 
-        y_pred_user, y_rel_user = y_pred[edge_mask_user], y_rel[edge_mask_user]
-        tot_rel = y_rel_user.sum()
+            k = round(num_samples / (weight + 1))
+            topk_indices = torch.topk(y_pred_user_sample, k)[1]
+            pred = y_user_sample[topk_indices]
+            top1_value, top1_index = torch.topk(pred, 1)
+            mrr_user = (1 / (top1_index + 1)) if top1_value > 0 else 0
 
-        num_neighbors = int(edge_mask_user.sum())
-        k_adjusted = num_neighbors if (k is None) else min(k, num_neighbors)
-
-        if tot_rel > 0 and k_adjusted > 0:
-            topk_indices = torch.topk(y_pred_user, k_adjusted)[1]
-            _r_at_k += y_rel_user[topk_indices].sum() / tot_rel
+            mrr += mrr_user
             num_users += 1
 
-    _r_at_k /= max(1, num_users)
+        mrr /= num_users
 
-    return float(_r_at_k)
+        return float(mrr)
 
+    def get_ndcg(self, weight=4):
+        ndcg, num_users = 0, 0
 
-def f_score(precision, recall, beta=1):
-    return float(((1 + beta ** 2) * precision * recall) / (((beta ** 2) * precision) + recall))
+        for user in self.users:
+            _, y_pred_user_sample, y_user_sample = self.item_recom_sampling(user, weight)
 
+            if (num_samples := y_user_sample.numel()) == 0:
+                continue
 
-def ndcg(users, edge_index, y_pred, y, k=None):
-    _ndcg, num_users = 0, 0
+            k = round(num_samples / (weight + 1))
+            topk_indices = torch.topk(y_pred_user_sample, k)[1]
+            pred = y_user_sample[topk_indices]
+            topk_y_user = torch.topk(y_user_sample, k)[0]
 
-    for user in users:
-        edge_mask_user = edge_index[0].eq(user)
+            d = torch.arange(2, k + 2).log2().to(utils.device)
+            dcg_y_pred_user = ((2 ** pred - 1) / d).sum()
+            dcg_y_user = ((2 ** topk_y_user - 1) / d).sum()
 
-        num_neighbors = int(edge_mask_user.sum())
-        k_adjusted = num_neighbors if (k is None) else min(k, num_neighbors)
+            if dcg_y_user == 0:
+                continue
 
-        if k_adjusted > 0:
-            d = torch.arange(2, k_adjusted + 2).log2().to(utils.device)  # discount
+            ndcg_user = dcg_y_pred_user / dcg_y_user
 
-            y_pred_user, y_user = y_pred[edge_mask_user], y[edge_mask_user]
-
-            topk_indices = torch.topk(y_pred_user, k_adjusted)[1]
-            topk_y_user = torch.topk(y_user, k_adjusted)[0]
-
-            dcg_y_pred_user = ((2 ** y_user[topk_indices] - 1) / d).sum()  # discount cumulative gain (predicted)
-            dcg_y_user = ((2 ** topk_y_user - 1) / d).sum()  # discount cumulative gain (normal)
-
-            # normalized discount cumulative gain
-            if dcg_y_user > 0:
-                ndcg_user = dcg_y_pred_user / dcg_y_user
-                _ndcg += ndcg_user
-                num_users += 1
-
-    _ndcg /= max(1, num_users)
-
-    return float(_ndcg)
-
-
-def mrr(users, edge_index, y_pred, y_rel, k=None):
-    _mrr, num_users = 0, 0
-
-    for user in users:
-        edge_mask_user = edge_index[0].eq(user)
-
-        num_neighbors = int(edge_mask_user.sum())
-        k_adjusted = num_neighbors if (k is None) else min(k, num_neighbors)
-
-        if k_adjusted > 0:
-            y_pred_user, y_rel_user = y_pred[edge_mask_user], y_rel[edge_mask_user]
-
-            topk_indices = torch.topk(y_pred_user, k_adjusted)[1]
-
-            top1_value, top1_index = torch.topk(y_rel_user[topk_indices], 1)
-
-            if top1_value > 0:
-                _mrr += (1 / (top1_index + 1))
-
+            ndcg += ndcg_user
             num_users += 1
 
-    _mrr /= max(1, num_users)
+        ndcg /= num_users
 
-    return float(_mrr)
+        return float(ndcg)
 
+    def get_r_at_k(self, weight=4):
+        r_at_k, num_users = 0, 0
 
-def calculate_metrics(users, edge_index, y_pred, y, loss):
-    results = init_metrics(0)
+        for user in self.users:
+            _, y_pred_user_sample, y_user_sample = self.item_recom_sampling(user, weight)
 
-    y_rel = utils.classify(y, [0, 1])  # 0: non-relevance, 1: relevance
+            if (num_samples := y_user_sample.numel()) == 0:
+                continue
 
-    results[Metrics.MSELOSS.value] = loss
+            k = round(num_samples / (weight + 1))
+            topk_indices = torch.topk(y_pred_user_sample, k)[1]
+            pred = y_user_sample[topk_indices]
+            r_at_k_user = pred.count_nonzero() / k
 
-    results[Metrics.MAP.value] = _map(users, edge_index, y_pred, y_rel)
+            r_at_k += r_at_k_user
+            num_users += 1
 
-    # results[Metrics.R_AT_K.value] = r_at_k(users, edge_index, y_pred, y_rel, 10)
+        r_at_k /= num_users
 
-    # results[Metrics.FScore.value] = f_score(results[Metrics.MAP.value], results[Metrics.R_AT_K.value])
+        return float(r_at_k)
 
-    results[Metrics.NDCG.value] = ndcg(users, edge_index, y_pred, y)
-
-    results[Metrics.MRR.value] = mrr(users, edge_index, y_pred, y_rel)
-
-    return results
+    def get_f_score(self, precision, recall, beta=1):
+        return float(((1 + beta ** 2) * precision * recall) / (((beta ** 2) * precision) + recall))
