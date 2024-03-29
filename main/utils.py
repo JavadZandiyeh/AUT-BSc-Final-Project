@@ -1,6 +1,7 @@
 import os
 import pprint
 import random
+import warnings
 
 import numpy as np
 import torch
@@ -9,6 +10,17 @@ import networkx as nx
 import enum
 from torch.utils.tensorboard.writer import SummaryWriter
 
+warnings.filterwarnings('ignore')
+
+# basic settings
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True  # if using CUDA
+torch.backends.cudnn.benchmark = False     # if using CUDA
+
+# current device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -39,9 +51,8 @@ class Metrics(ExtendedEnum):
     NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
     R_AT_K = 'R_AT_K'  # Recall at K
     FScore = 'FScore'  # F-beta Score
-    # PRU = 'PRU'  # Preference Ranking Utility
-    # PRI = 'PRI'  # Preference Ranking Index
-    # FScore = 'FScore'  # F-beta Score
+    PRU = 'PRU'  # Preference Ranking Utility
+    PRI = 'PRI'  # Preference Ranking Index
 
 
 def init_metrics(value=0):
@@ -89,6 +100,12 @@ def get_edge_mask_node(node, edge_index):
     node_mask = edge_index[0].eq(node) | edge_index[1].eq(node)
 
     return node_mask
+
+
+def get_degrees(nodes: list, edge_index):
+    degrees = [edge_index[0].eq(node).sum().item() for node in nodes]
+
+    return degrees
 
 
 def get_tensor_distribution(shape, _type: DistType = None):

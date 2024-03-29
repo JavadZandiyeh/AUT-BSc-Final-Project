@@ -31,7 +31,7 @@ def get_model(model_name):
             num_nodes=data.num_nodes,
             embedding_dim=channel,
             num_layers=3,
-            embedding=data.x
+            embedding=data.x.clone()
         )
     else:
         model = models.BigraphModel(
