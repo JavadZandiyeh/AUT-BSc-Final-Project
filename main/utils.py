@@ -396,7 +396,7 @@ def create_summary_writer(settings) -> SummaryWriter:
 
 def epoch_summary_write(writer: SummaryWriter, epoch, train_loss, val_loss, val_results):
     # results
-    val_results = {metric: {'val': value} for metric, value in val_results}
+    val_results = {metric: {'val': value} for metric, value in val_results.items()}
     loss_results = {'loss': {'train': train_loss, 'val': val_loss}}
     results = val_results | loss_results
 

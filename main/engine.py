@@ -72,6 +72,6 @@ def start(model, data, optimizer, loss_fn, writer, settings):
 
         utils.epoch_summary_write(writer, epoch, train_loss, val_loss, val_results)
 
-    test_results = eval_step(model, data, loss_fn, EngineSteps.TEST)
+    test_loss, test_results = eval_step(model, data, loss_fn, EngineSteps.TEST)
 
-    pprint.pprint(test_results)
+    pprint.pprint({'loss': test_loss} | test_results)

@@ -71,9 +71,9 @@ def start_train(model, loss_fn, settings):
 def start_test(model, loss_fn, settings):
     model = utils.load_model(model, settings)
 
-    test_results = engine.eval_step(model, data, loss_fn, utils.EngineSteps.TEST)
+    test_loss, test_results = engine.eval_step(model, data, loss_fn, utils.EngineSteps.TEST)
 
-    pprint.pprint(test_results)
+    pprint.pprint({'loss': test_loss} | test_results)
 
 
 if __name__ == '__main__':
