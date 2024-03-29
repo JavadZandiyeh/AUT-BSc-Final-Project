@@ -40,7 +40,7 @@ def train_step(model, data, optimizer, loss_fn, num_batches):
     return train_loss
 
 
-def eval_step(model, data, loss_fn, eval_type: EngineSteps):
+def eval_step(model, data, loss_fn, eval_type: EngineSteps, calc_results=True):
     model.eval()
 
     with torch.inference_mode():
@@ -55,22 +55,24 @@ def eval_step(model, data, loss_fn, eval_type: EngineSteps):
 
         val_loss = loss.item()
 
-        results = metrics.MetricsCalculation(data, h_eval, edge_mask_eval).get_results()
+        results = metrics.MetricsCalculation(data, h_eval, edge_mask_eval).get_results() if calc_results else None
 
     return val_loss, results
 
 
 def start(model, data, optimizer, loss_fn, writer, settings):
     for epoch in tqdm.tqdm(range(settings['epochs'])):
+        calc_results = (epoch % 10 == 0)  # calculate result every 10 epochs
+
         print(datetime.datetime.now())
 
         sampled_data = utils.edge_sampling(data, settings['pos_sampling_rate'], settings['neg_sampling_rate'])
 
         train_loss = train_step(model, sampled_data, optimizer, loss_fn, settings['num_batches'])
 
-        val_loss, val_results = eval_step(model, sampled_data, loss_fn, EngineSteps.VAL)
+        val_loss, val_results = eval_step(model, sampled_data, loss_fn, EngineSteps.VAL, calc_results)
 
-        utils.epoch_summary_write(writer, epoch, train_loss, val_loss, val_results)
+        calc_results and utils.epoch_summary_write(writer, epoch, train_loss, val_loss, val_results)
 
     test_loss, test_results = eval_step(model, data, loss_fn, EngineSteps.TEST)
 
