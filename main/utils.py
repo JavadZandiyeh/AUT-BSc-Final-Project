@@ -418,6 +418,7 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_loss, val_loss, val_
     results = val_results | loss_results
 
     # terminal
+    print()
     pprint.pprint(results)
 
     # writer
