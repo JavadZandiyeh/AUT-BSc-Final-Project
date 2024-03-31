@@ -161,7 +161,7 @@ class MetricsCalculation:
 
         _map /= len(self.users)
 
-        return float(_map)
+        return round(float(_map), 4)
 
     def get_mrr(self):
         mrr = 0
@@ -183,7 +183,7 @@ class MetricsCalculation:
 
         mrr /= len(self.users)
 
-        return float(mrr)
+        return round(float(mrr), 4)
 
     def get_ndcg(self):
         ndcg = 0
@@ -213,7 +213,7 @@ class MetricsCalculation:
 
         ndcg /= len(self.users)
 
-        return float(ndcg)
+        return round(float(ndcg), 4)
 
     def get_r_at_k(self):
         r_at_k = 0
@@ -234,7 +234,7 @@ class MetricsCalculation:
 
         r_at_k /= len(self.users)
 
-        return float(r_at_k)
+        return round(float(r_at_k), 4)
 
     @staticmethod
     def get_f_score(precision, recall, beta=1):
@@ -243,7 +243,7 @@ class MetricsCalculation:
         else:
             f_score = 0
 
-        return float(f_score)
+        return round(float(f_score), 4)
 
     def get_pru(self):
         pru, num_users = 0, 0
@@ -270,7 +270,7 @@ class MetricsCalculation:
 
         pru /= - num_users
 
-        return float(pru)
+        return round(float(pru), 4)
 
     def get_pri(self):
         items_pop_eval = torch.tensor(self.items_pop_eval, dtype=torch.float32).to(utils.device)
@@ -280,4 +280,4 @@ class MetricsCalculation:
 
         pri = - self.spearman(items_pop_eval[nonzero_indices], items_rank_avg_eval[nonzero_indices])
 
-        return float(pri)
+        return round(float(pri), 4)
