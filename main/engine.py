@@ -1,6 +1,5 @@
 import tqdm
 import torch
-import datetime
 import utils
 import metrics
 from utils import EngineSteps
@@ -63,8 +62,6 @@ def eval_step(model, data, loss_fn, eval_type: EngineSteps, calc_results=True):
 def start(model, data, optimizer, loss_fn, writer, settings):
     for epoch in tqdm.tqdm(range(settings['epochs'])):
         calc_results = (epoch % 10 == 0)  # calculate result every 10 epochs
-
-        print(datetime.datetime.now())
 
         sampled_data = utils.edge_sampling(data, settings['pos_sampling_rate'], settings['neg_sampling_rate'])
 

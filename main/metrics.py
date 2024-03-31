@@ -1,5 +1,3 @@
-import datetime
-
 import torch
 from utils import Metrics
 import utils
