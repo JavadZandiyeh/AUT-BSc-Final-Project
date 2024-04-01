@@ -33,10 +33,18 @@ def get_model(model_name):
             num_layers=3,
             embedding=data.x.clone()
         )
-    else:
-        model = models.BigraphModel(
+    elif model_name == 'BigraphGATv2Model':
+        model = models.BigraphGATv2Model(
             channels_ii=[channel, channel, channel, channel],
             channels_uiu=[channel, channel, channel, channel]
+        )
+    else:
+        model = models.BigraphLightModel(
+            num_nodes_ii=data.num_items,
+            num_nodes_uiu=data.num_nodes,
+            embedding_dim=channel,
+            num_layers_ii=3,
+            num_layers_uiu=3
         )
 
     return model

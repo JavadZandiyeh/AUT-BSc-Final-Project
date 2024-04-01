@@ -25,7 +25,7 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         forward_out = x.clone()
 
         if node_mask is None:
-            node_mask = torch.ones(forward_out.shape[0], dtype=torch.bool)
+            node_mask = torch.ones(forward_out.size(0), dtype=torch.bool)
 
         forward_out[node_mask] = self.lin(forward_out[node_mask])
 
@@ -78,57 +78,89 @@ class CustomizedGAT(pyg.nn.MessagePassing):
         return update_out
 
 
-class BigraphModel(torch.nn.Module):
+class BigraphGATv2Model(torch.nn.Module):
     def __init__(self, channels_ii: list, channels_uiu: list):
         super().__init__()
-        self.cgat1_ii = CustomizedGAT(channels_ii[0], channels_ii[1])
-        self.cgat2_ii = CustomizedGAT(channels_ii[1], channels_ii[2])
 
-        self.cgat1_uiu = CustomizedGAT(channels_uiu[0], channels_uiu[1])
-        self.cgat2_uiu = CustomizedGAT(channels_uiu[1], channels_uiu[2])
+        self.num_layers_ii, self.num_layers_uiu = len(channels_ii) - 1, len(channels_uiu) - 1
+
+        layers_ii = [pyg.nn.GATv2Conv(channels_ii[i], channels_ii[i + 1], edge_dim=1, concat=False, fill_value=1)
+                     for i in range(self.num_layers_ii)]
+
+        layers_uiu = [pyg.nn.GATv2Conv(channels_uiu[i], channels_uiu[i + 1], edge_dim=1, concat=False, fill_value=1)
+                      for i in range(self.num_layers_uiu)]
+
+        self.layers = torch.nn.ModuleList(layers_ii + layers_uiu)
 
     def forward(self, data):
         """ item-item graph """
-        edge_index_ii, edge_attr_ii = data.edge_index[:, data.edge_mask_ii], data.edge_attr[data.edge_mask_ii]
+        edge_index_ii = data.edge_index[:, data.edge_mask_ii] - data.node_mask_item.nonzero()[0]
+        edge_attr_ii = data.edge_attr[data.edge_mask_ii]
 
-        edge_attr1_ii = utils.get_edge_att(data.x, edge_index_ii, edge_attr_ii)
-        x1_ii = self.cgat1_ii(data.x, edge_index_ii, edge_attr1_ii, data.node_mask_item)
+        h_ii = data.x[data.node_mask_item, :].clone()
 
-        edge_attr2_ii = utils.get_edge_att(x1_ii, edge_index_ii, edge_attr_ii)
-        x2_ii = self.cgat2_ii(x1_ii, edge_index_ii, edge_attr2_ii, data.node_mask_item)
+        for i in range(self.num_layers_ii):
+            edge_att_ii = utils.get_edge_att(h_ii, edge_index_ii, edge_attr_ii)
+            h_ii = self.layers[i](h_ii, edge_index_ii, edge_att_ii)
 
         """ user-item graph """
-        edge_index_uiu, edge_attr_uiu = data.edge_index[:, data.edge_mask_uiu], data.edge_attr[data.edge_mask_uiu]
+        edge_index_uiu = data.edge_index[:, data.edge_mask_uiu * data.edge_mask_train]
+        edge_attr_uiu = data.edge_attr[data.edge_mask_uiu * data.edge_mask_train]
 
-        x1_uiu = self.cgat1_uiu(x2_ii, edge_index_uiu, edge_attr_uiu)
-        x2_uiu = self.cgat1_uiu(x1_uiu, edge_index_uiu, edge_attr_uiu)
+        h_uiu = data.x.clone()
+        h_uiu[data.node_mask_item, :] = h_ii
 
-        x2_uiu_j = torch.index_select(x2_uiu, 0, edge_index_uiu[0])
-        x2_uiu_i = torch.index_select(x2_uiu, 0, edge_index_uiu[1])
+        for i in range(self.num_layers_uiu):
+            h_uiu = self.layers[self.num_layers_ii + i](h_uiu, edge_index_uiu, edge_attr_uiu)
 
-        edge_y_pred = torch.zeros_like(data.edge_attr)
-        edge_y_pred[data.edge_mask_uiu] = torch.nn.functional.cosine_similarity(x2_uiu_j, x2_uiu_i, dim=1)
+        return h_uiu
 
-        return edge_y_pred
+
+class BigraphLightModel(torch.nn.Module):
+    def __init__(self, num_nodes_ii, num_nodes_uiu, embedding_dim, num_layers_ii, num_layers_uiu):
+        super().__init__()
+
+        self.layers_ii = pyg.nn.LightGCN(
+            num_nodes=num_nodes_ii,
+            embedding_dim=embedding_dim,
+            num_layers=num_layers_ii,
+        )
+
+        self.layers_uiu = pyg.nn.LightGCN(
+            num_nodes=num_nodes_uiu,
+            embedding_dim=embedding_dim,
+            num_layers=num_layers_uiu,
+        )
+
+    def forward(self, data):
+        """ item-item graph """
+        edge_index_ii = data.edge_index[:, data.edge_mask_ii] - data.node_mask_item.nonzero()[0]  # start from zero
+        edge_attr_ii = data.edge_attr[data.edge_mask_ii]
+
+        self.layers_ii.embedding.weight.data = self.layers_uiu.embedding.weight.data[data.node_mask_item, :]
+
+        h_ii = self.layers_ii.get_embedding(edge_index_ii, edge_attr_ii)
+
+        """ user-item graph """
+        edge_index_uiu = data.edge_index[:, data.edge_mask_uiu * data.edge_mask_train]
+        edge_attr_uiu = data.edge_attr[data.edge_mask_uiu * data.edge_mask_train]
+
+        self.layers_uiu.embedding.weight.data[data.node_mask_item, :] = h_ii
+
+        h_uiu = self.layers_uiu.get_embedding(edge_index_uiu, edge_attr_uiu)
+
+        return h_uiu
 
 
 class GATv2ConvModel(torch.nn.Module):
     def __init__(self, channels: list):
         super().__init__()
+        self.num_layers = len(channels) - 1
 
-        self.layers = torch.nn.ModuleList()
+        layers = [pyg.nn.GATv2Conv(channels[i], channels[i + 1], edge_dim=1, concat=False, fill_value=1)
+                  for i in range(self.num_layers)]
 
-        for i in range(len(channels) - 1):
-            self.layers.add_module(
-                f'gat{i + 1}',
-                pyg.nn.GATv2Conv(
-                    in_channels=channels[i],
-                    out_channels=channels[i + 1],
-                    edge_dim=1,
-                    concat=False,
-                    fill_value=1
-                )
-            )
+        self.layers = torch.nn.ModuleList(layers)
 
     def forward(self, data):
         # prepare required variables
