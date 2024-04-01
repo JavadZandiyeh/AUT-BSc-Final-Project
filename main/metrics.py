@@ -1,26 +1,29 @@
 import math
 import torch
-from utils import Metrics
+from utils import EngineSteps, Metrics
 import utils
 import random
 import torchmetrics
 
 
 class MetricsCalculation:
-    def __init__(self, data, h, edge_mask_eval, sampling_weight=4, k=10):
+    def __init__(self, data, h, eval_type: EngineSteps, sampling_weight=4, k=10):
         self.h = h
         self.k = k
         self.data = data
-        self.edge_mask_eval = edge_mask_eval
         self.sampling_weight = sampling_weight
         self.spearman = torchmetrics.SpearmanCorrCoef()
+
+        self.edge_mask_eval = data.edge_mask_val if eval_type == EngineSteps.VAL else data.edge_mask_test
 
         self.y_pred = utils.edge_prediction(h, data.edge_index) * data.edge_mask_uiu
 
         self.users = data.node_mask_user.nonzero().squeeze().tolist()
         self.items = data.node_mask_item.nonzero().squeeze().tolist()
 
-        self.items_pop_eval = self.items_pop_eval()
+        self.items_pop = self.items_pop()
+        self.items_pop_dict = dict(zip(self.items, self.items_pop))
+
         self.items_rank_avg_eval = self.items_rank_avg_eval()
 
     def items_recom(self, user):
@@ -92,9 +95,9 @@ class MetricsCalculation:
 
         return edge_index_user_sample, y_pred_user_sample, y_user_sample
 
-    def items_pop_eval(self):  # eval-items popularity (over all users)
-        edge_index_eval = self.data.edge_index[:, self.edge_mask_eval]
-        items_pop = utils.get_degrees(self.items, edge_index_eval)
+    def items_pop(self):  # items popularity in the train data (over all users)
+        edge_index_train = self.data.edge_index[:, self.data.edge_mask_train]
+        items_pop = utils.get_degrees(self.items, edge_index_train)
 
         return items_pop
 
@@ -102,25 +105,30 @@ class MetricsCalculation:
         num_items = len(self.items)
 
         items_rank_sum = [0 for _ in range(num_items)]  # summation of ranks for each item over user profiles
-        items_pop = [0 for _ in range(num_items)]  # num occurrence of item in users profile
+        items_num_matched_users = [0 for _ in range(num_items)]  # num occurrence of item in users profile
 
         for user in self.users:
-            edge_mask_user = self.data.edge_index[0].eq(user)
-            edge_mask_user_eval = edge_mask_user * self.edge_mask_eval
+            edge_mask_user_eval = self.data.edge_index[0].eq(user) * self.edge_mask_eval
+
+            if edge_mask_user_eval.sum() == 0:
+                continue
 
             edge_index_user_eval = self.data.edge_index[:, edge_mask_user_eval]
 
             items_user = edge_index_user_eval[1].tolist()
 
+            # find rank of items in the user profile
             y_pred_user = self.y_pred[edge_mask_user_eval]
-            y_pred_user_ranks = y_pred_user.argsort(descending=True).tolist()
+            indices = y_pred_user.argsort(descending=True)
+            items_user_rank = torch.zeros_like(y_pred_user, dtype=torch.int64)
+            items_user_rank[indices] = torch.arange(1, len(items_user)+1, dtype=torch.int64).to(utils.device)
 
-            for item, rank in zip(items_user, y_pred_user_ranks):
+            for item, rank in zip(items_user, items_user_rank):
                 index = self.items.index(item)
                 items_rank_sum[index] += rank
-                items_pop[index] += 1
+                items_num_matched_users[index] += 1
 
-        items_rank_avg = [(items_rank_sum[i] / items_pop[i]) if (items_pop[i] != 0) else math.inf
+        items_rank_avg = [(items_rank_sum[i] / items_num_matched_users[i]) if (items_num_matched_users[i] != 0) else math.inf
                           for i in range(num_items)]
 
         return items_rank_avg
@@ -256,16 +264,18 @@ class MetricsCalculation:
 
             edge_index_user_eval = self.data.edge_index[:, edge_mask_user_eval]
 
-            y_pred_user_eval = self.y_pred[edge_mask_user_eval]
-            items_rank_user_eval = y_pred_user_eval.argsort(descending=True).float()
-
             items_user = edge_index_user_eval[1].tolist()
 
-            items_pop_dict = dict(zip(self.items, self.items_pop_eval))
-            items_pop_user = [items_pop_dict[item] for item in items_user]
+            # find rank of items in the user profile
+            y_pred_user = self.y_pred[edge_mask_user_eval]
+            indices = y_pred_user.argsort(descending=True)
+            items_user_rank = torch.zeros_like(y_pred_user, dtype=torch.float32)
+            items_user_rank[indices] = torch.arange(1, len(items_user)+1, dtype=torch.float32).to(utils.device)
+
+            items_pop_user = [self.items_pop_dict[item] for item in items_user]
             items_pop_user = torch.tensor(items_pop_user, dtype=torch.float32).to(utils.device)
 
-            pru += self.spearman(items_pop_user, items_rank_user_eval)
+            pru += self.spearman(items_pop_user, items_user_rank)
             num_users += 1
 
         pru /= - num_users
@@ -273,11 +283,12 @@ class MetricsCalculation:
         return round(float(pru), 4)
 
     def get_pri(self):
-        items_pop_eval = torch.tensor(self.items_pop_eval, dtype=torch.float32).to(utils.device)
+        items_pop = torch.tensor(self.items_pop, dtype=torch.float32).to(utils.device)
         items_rank_avg_eval = torch.tensor(self.items_rank_avg_eval, dtype=torch.float32).to(utils.device)
 
-        nonzero_indices = items_pop_eval.nonzero()  # items that have been occurred at least once in the user profiles
+        # items that have been occurred at least once in the user profiles of the eval dataset
+        non_inf_mask = (items_rank_avg_eval != torch.inf)
 
-        pri = - self.spearman(items_pop_eval[nonzero_indices], items_rank_avg_eval[nonzero_indices])
+        pri = - self.spearman(items_pop[non_inf_mask], items_rank_avg_eval[non_inf_mask])
 
         return round(float(pri), 4)
