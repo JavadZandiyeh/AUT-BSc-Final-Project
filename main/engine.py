@@ -6,10 +6,12 @@ from utils import EngineSteps
 import pprint
 
 
-def train_step(model, sampled_data, optimizer, loss_fn, num_batches):
+def train_step(model, data, optimizer, loss_fn, num_batches, pos_sampling_rate, neg_sampling_rate):
     train_loss = 0
 
     model.train()
+
+    sampled_data = utils.edge_sampling(data, pos_sampling_rate, neg_sampling_rate)
 
     edge_index_train = sampled_data.edge_index[:, sampled_data.edge_mask_train]
     indices_batches = utils.mini_batching(edge_index_train, num_batches)
@@ -40,16 +42,16 @@ def train_step(model, sampled_data, optimizer, loss_fn, num_batches):
     return train_loss
 
 
-def eval_step(model, data, sampled_data, loss_fn, eval_type: EngineSteps, topk=10, calc_results=True):
+def eval_step(model, data, loss_fn, eval_type: EngineSteps, topk=10, calc_results=True):
     model.eval()
 
     with torch.inference_mode():
-        edge_mask_eval = sampled_data.edge_mask_val if eval_type == EngineSteps.VAL else sampled_data.edge_mask_test
+        edge_mask_eval = data.edge_mask_val if eval_type == EngineSteps.VAL else data.edge_mask_test
 
-        h_eval = model(sampled_data)
+        h_eval = model(data)
 
-        y_pred_eval = utils.edge_prediction(h_eval, sampled_data.edge_index[:, edge_mask_eval])
-        y_eval = sampled_data.y[edge_mask_eval]
+        y_pred_eval = utils.edge_prediction(h_eval, data.edge_index[:, edge_mask_eval])
+        y_eval = data.y[edge_mask_eval]
 
         loss = loss_fn(y_pred_eval, y_eval)
 
@@ -64,14 +66,33 @@ def start(model, data, optimizer, loss_fn, writer, settings):
     for epoch in tqdm.tqdm(range(settings['epochs'])):
         calc_results = (epoch % 10 == 0)  # calculate result every 10 epochs
 
-        sampled_data = utils.edge_sampling(data, settings['pos_sampling_rate'], settings['neg_sampling_rate'])
+        train_loss = train_step(
+            model=model,
+            data=data,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+            num_batches=settings['num_batches'],
+            pos_sampling_rate=settings['pos_sampling_rate'],
+            neg_sampling_rate=settings['neg_sampling_rate']
+        )
 
-        train_loss = train_step(model, sampled_data, optimizer, loss_fn, settings['num_batches'])
-
-        val_loss, val_results = eval_step(model, data, sampled_data, loss_fn, EngineSteps.VAL, settings['topk'], calc_results)
+        val_loss, val_results = eval_step(
+            model=model,
+            data=data,
+            loss_fn=loss_fn,
+            eval_type=EngineSteps.VAL,
+            topk=settings['topk'],
+            calc_results=calc_results
+        )
 
         calc_results and utils.epoch_summary_write(writer, epoch, train_loss, val_loss, val_results)
 
-    test_loss, test_results = eval_step(model, data, data, loss_fn, EngineSteps.TEST, settings['topk'])
+    test_loss, test_results = eval_step(
+        model=model,
+        data=data,
+        loss_fn=loss_fn,
+        eval_type=EngineSteps.TEST,
+        topk=settings['topk']
+    )
 
     pprint.pprint({'loss': test_loss} | test_results)

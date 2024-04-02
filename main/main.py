@@ -76,7 +76,13 @@ def start_train(model, loss_fn):
 def start_test(model, loss_fn):
     model = utils.load_model(model, settings)
 
-    test_loss, test_results = engine.eval_step(model, data, data, loss_fn, utils.EngineSteps.TEST, settings['topk'])
+    test_loss, test_results = engine.eval_step(
+        model=model,
+        data=data,
+        loss_fn=loss_fn,
+        eval_type=utils.EngineSteps.TEST,
+        topk=settings['topk']
+    )
 
     pprint.pprint({'loss': test_loss} | test_results)
 
