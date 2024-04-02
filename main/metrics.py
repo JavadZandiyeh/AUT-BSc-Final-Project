@@ -7,7 +7,7 @@ import torchmetrics
 
 
 class MetricsCalculation:
-    def __init__(self, data, h, eval_type: EngineSteps, sampling_weight=4, k=10):
+    def __init__(self, data, h, eval_type: EngineSteps, k=10, sampling_weight=4):
         self.h = h
         self.k = k
         self.data = data

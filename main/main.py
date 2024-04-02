@@ -58,7 +58,8 @@ def get_settings(section):
         'learning_rate': config.getfloat(section, 'learning_rate'),
         'num_batches': config.getint(section, 'num_batches'),
         'pos_sampling_rate': config.getfloat(section, 'pos_sampling_rate'),
-        'neg_sampling_rate': config.getfloat(section, 'neg_sampling_rate')
+        'neg_sampling_rate': config.getfloat(section, 'neg_sampling_rate'),
+        'topk': config.getint(section, 'topk')
     }
 
     return settings
@@ -79,7 +80,7 @@ def start_train(model, loss_fn, settings):
 def start_test(model, loss_fn, settings):
     model = utils.load_model(model, settings)
 
-    test_loss, test_results = engine.eval_step(model, data, data, loss_fn, utils.EngineSteps.TEST)
+    test_loss, test_results = engine.eval_step(model, data, data, loss_fn, utils.EngineSteps.TEST, settings['topk'])
 
     pprint.pprint({'loss': test_loss} | test_results)
 

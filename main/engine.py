@@ -40,7 +40,7 @@ def train_step(model, sampled_data, optimizer, loss_fn, num_batches):
     return train_loss
 
 
-def eval_step(model, data, sampled_data, loss_fn, eval_type: EngineSteps, calc_results=True):
+def eval_step(model, data, sampled_data, loss_fn, eval_type: EngineSteps, topk=10, calc_results=True):
     model.eval()
 
     with torch.inference_mode():
@@ -55,7 +55,7 @@ def eval_step(model, data, sampled_data, loss_fn, eval_type: EngineSteps, calc_r
 
         val_loss = loss.item()
 
-        results = metrics.MetricsCalculation(data, h_eval, eval_type).get_results() if calc_results else None
+        results = metrics.MetricsCalculation(data, h_eval, eval_type, topk).get_results() if calc_results else None
 
     return val_loss, results
 
@@ -68,10 +68,10 @@ def start(model, data, optimizer, loss_fn, writer, settings):
 
         train_loss = train_step(model, sampled_data, optimizer, loss_fn, settings['num_batches'])
 
-        val_loss, val_results = eval_step(model, data, sampled_data, loss_fn, EngineSteps.VAL, calc_results)
+        val_loss, val_results = eval_step(model, data, sampled_data, loss_fn, EngineSteps.VAL, settings['topk'], calc_results)
 
         calc_results and utils.epoch_summary_write(writer, epoch, train_loss, val_loss, val_results)
 
-    test_loss, test_results = eval_step(model, data, data, loss_fn, EngineSteps.TEST)
+    test_loss, test_results = eval_step(model, data, data, loss_fn, EngineSteps.TEST, settings['topk'])
 
     pprint.pprint({'loss': test_loss} | test_results)

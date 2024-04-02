@@ -397,16 +397,21 @@ def mini_batching(edge_index, num_batches):  # for undirected graphs only
     return batches  # indices of edge_index
 
 
-def create_summary_writer(settings) -> SummaryWriter:
-    base_path = '../runs'
-
+def str_run_details(settings):
     run_details = f'e{settings["epochs"]}' \
                   + f'-b{settings["num_batches"]}' \
                   + f'-lr{settings["learning_rate"]}' \
                   + f'-pos{settings["pos_sampling_rate"]}' \
-                  + f'-neg{settings["neg_sampling_rate"]}'
+                  + f'-neg{settings["neg_sampling_rate"]}' \
+                  + f'-top{settings["topk"]}'
 
-    path = os.path.join(base_path, settings['run_name'], run_details, settings['model_name'])
+    return run_details
+
+
+def create_summary_writer(settings) -> SummaryWriter:
+    run_details = str_run_details(settings)
+
+    path = os.path.join('../runs', settings['run_name'], run_details, settings['model_name'])
 
     return SummaryWriter(log_dir=path)
 
@@ -426,34 +431,24 @@ def epoch_summary_write(writer: SummaryWriter, epoch, train_loss, val_loss, val_
         writer.add_scalars(main_tag=metric, tag_scalar_dict=result, global_step=epoch)
 
 
-def get_model_path(settings):
-    run_details = f'e{settings["epochs"]}' \
-                  + f'-b{settings["num_batches"]}' \
-                  + f'-lr{settings["learning_rate"]}' \
-                  + f'-pos{settings["pos_sampling_rate"]}' \
-                  + f'-neg{settings["neg_sampling_rate"]}'
-
-    path = os.path.join('../models', settings["run_name"], run_details)
-
-    return path
-
-
 def save_model(model, settings):
+    run_details = str_run_details(settings)
+
+    path = os.path.join('../models', settings['run_name'], run_details)
+    (not os.path.exists(path)) and os.makedirs(path)
+
     model_name = f'{settings["model_name"]}.pth'
 
-    path = get_model_path(settings)
-    if not os.path.exists(path):
-        os.makedirs(path)
     path = os.path.join(path, model_name)
 
     torch.save(obj=model.state_dict(), f=path)
 
 
 def load_model(model, settings):
+    run_details = str_run_details(settings)
     model_name = f'{settings["model_name"]}.pth'
 
-    path = get_model_path(settings)
-    path = os.path.join(path, model_name)
+    path = os.path.join('../models', settings['run_name'], run_details, model_name)
 
     model.load_state_dict(torch.load(path, map_location=device))
 
