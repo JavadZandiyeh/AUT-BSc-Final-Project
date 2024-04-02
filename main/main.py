@@ -38,7 +38,7 @@ def get_model(model_name):
             channels_ii=[channel, channel, channel, channel],
             channels_uiu=[channel, channel, channel, channel]
         )
-    else:
+    else:  # BigraphLightModel
         model = models.BigraphLightModel(
             num_nodes_ii=data.num_items,
             num_nodes_uiu=data.num_nodes,

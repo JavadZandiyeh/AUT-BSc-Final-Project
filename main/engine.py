@@ -11,7 +11,8 @@ def train_step(model, sampled_data, optimizer, loss_fn, num_batches):
 
     model.train()
 
-    indices_batches = utils.mini_batching(sampled_data.edge_index[:, sampled_data.edge_mask_train], num_batches)
+    edge_index_train = sampled_data.edge_index[:, sampled_data.edge_mask_train]
+    indices_batches = utils.mini_batching(edge_index_train, num_batches)
 
     for num_batch, indices_batch in enumerate(indices_batches):
         # create an edge mask for this batch

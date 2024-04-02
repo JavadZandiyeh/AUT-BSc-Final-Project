@@ -49,7 +49,7 @@ class Metrics(ExtendedEnum):
     MAP = 'MAP'  # Mean Average Precision
     MRR = 'MRR'  # Mean Reciprocal Rank
     NDCG = 'NDCG'  # Normalized Discount Cumulative Gain
-    R_AT_K = 'R_AT_K'  # Recall at K
+    RECALL = 'RECALL'
     FScore = 'FScore'  # F-beta Score
     PRU = 'PRU'  # Preference Ranking Utility
     PRI = 'PRI'  # Preference Ranking Index
