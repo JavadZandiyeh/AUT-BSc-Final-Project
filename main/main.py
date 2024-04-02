@@ -55,7 +55,8 @@ def get_model(model_name):
             num_nodes_uiu=data.num_nodes,
             embedding_dim=channel,
             num_layers_ii=3,
-            num_layers_uiu=3
+            num_layers_uiu=3,
+            init_x_items=data.x[data.node_mask_item, :].clone()
         )
 
     return model

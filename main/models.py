@@ -117,7 +117,7 @@ class BigraphGATv2Model(torch.nn.Module):
 
 
 class BigraphLightModel(torch.nn.Module):
-    def __init__(self, num_nodes_ii, num_nodes_uiu, embedding_dim, num_layers_ii, num_layers_uiu):
+    def __init__(self, num_nodes_ii, num_nodes_uiu, embedding_dim, num_layers_ii, num_layers_uiu, init_x_items=None):
         super().__init__()
 
         self.layers_ii = pyg.nn.LightGCN(
@@ -132,22 +132,25 @@ class BigraphLightModel(torch.nn.Module):
             num_layers=num_layers_uiu,
         )
 
+        if init_x_items is not None:
+            self.layers_ii.embedding.weight.data = init_x_items.clone()
+
     def forward(self, data):
         """ item-item graph """
         edge_index_ii = data.edge_index[:, data.edge_mask_ii] - data.node_mask_item.nonzero()[0]  # start from zero
         edge_attr_ii = data.edge_attr[data.edge_mask_ii]
 
-        self.layers_ii.embedding.weight.data = self.layers_uiu.embedding.weight.data[data.node_mask_item, :]
-
         h_ii = self.layers_ii.get_embedding(edge_index_ii, edge_attr_ii)
+
+        self.layers_uiu.embedding.weight.data[data.node_mask_item, :] = h_ii.clone()
 
         """ user-item graph """
         edge_index_uiu = data.edge_index[:, data.edge_mask_uiu * data.edge_mask_train]
         edge_attr_uiu = data.edge_attr[data.edge_mask_uiu * data.edge_mask_train]
 
-        self.layers_uiu.embedding.weight.data[data.node_mask_item, :] = h_ii
-
         h_uiu = self.layers_uiu.get_embedding(edge_index_uiu, edge_attr_uiu)
+
+        self.layers_ii.embedding.weight.data = h_uiu[data.node_mask_item, :].clone()
 
         return h_uiu
 
@@ -187,7 +190,7 @@ class LightGCNModel(torch.nn.Module):
         )
 
         if init_x is not None:
-            self.light_gcn.embedding.weight.data = init_x
+            self.light_gcn.embedding.weight.data = init_x.clone()
 
     def forward(self, data):
         edge_index = data.edge_index[:, data.edge_mask_train]
