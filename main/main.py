@@ -42,7 +42,7 @@ def get_model(model_name):
             num_nodes=data.num_nodes,
             embedding_dim=channel,
             num_layers=3,
-            init_x=data.x.clone()
+            init_x=data.x
         )
     elif model_name == 'BigraphGATv2Model':
         model = models.BigraphGATv2Model(
@@ -56,7 +56,7 @@ def get_model(model_name):
             embedding_dim=channel,
             num_layers_ii=3,
             num_layers_uiu=3,
-            init_x_items=data.x[data.node_mask_item, :].clone()
+            init_x_items=data.x[data.node_mask_item, :]
         )
 
     return model
@@ -67,7 +67,14 @@ def start_train(model, loss_fn):
 
     writer = utils.create_summary_writer(settings)
 
-    engine.start(model, data, optimizer, loss_fn, writer, settings)
+    engine.start(
+        model=model,
+        data=data,
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        writer=writer,
+        settings=settings
+    )
 
     writer.close()
 
@@ -91,5 +98,7 @@ def start_test(model, loss_fn):
 if __name__ == '__main__':
     _model = get_model(settings['model_name']).to(utils.device)
     _loss_fn = torch.nn.MSELoss().to(utils.device)
+
+    data.edge_attr[data.edge_mask_ii] = utils.get_edge_att(data.x, data.edge_index, data.edge_attr)[data.edge_mask_ii]
 
     start_train(_model, _loss_fn) if (phase == 'train') else start_test(_model, _loss_fn)
