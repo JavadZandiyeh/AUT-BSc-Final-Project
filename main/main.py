@@ -99,6 +99,4 @@ if __name__ == '__main__':
     _model = get_model(settings['model_name']).to(utils.device)
     _loss_fn = torch.nn.MSELoss().to(utils.device)
 
-    data.edge_attr[data.edge_mask_ii] = utils.get_edge_att(data.x, data.edge_index, data.edge_attr)[data.edge_mask_ii]
-
     start_train(_model, _loss_fn) if (phase == 'train') else start_test(_model, _loss_fn)

@@ -1,6 +1,5 @@
 import torch
 import torch_geometric as pyg
-import utils
 
 
 class CustomizedGAT(pyg.nn.MessagePassing):
@@ -100,8 +99,7 @@ class BigraphGATv2Model(torch.nn.Module):
         h_ii = data.x[data.node_mask_item, :].clone()
 
         for i in range(self.num_layers_ii):
-            edge_att_ii = utils.get_edge_att(h_ii, edge_index_ii, edge_attr_ii)
-            h_ii = self.layers[i](h_ii, edge_index_ii, edge_att_ii)
+            h_ii = self.layers[i](h_ii, edge_index_ii, edge_attr_ii)
 
         """ user-item graph """
         edge_index_uiu = data.edge_index[:, data.edge_mask_uiu * data.edge_mask_train]

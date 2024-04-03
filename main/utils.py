@@ -59,15 +59,6 @@ def init_metrics(value=0):
     return {metric: value for metric in Metrics.list()}
 
 
-def get_edge_att(x, edge_index, edge_attr):
-    x1, x2 = x[edge_index[0], :], x[edge_index[1], :]
-
-    cosine_sim = torch.nn.functional.cosine_similarity(x1, x2, dim=1)
-    edge_att = cosine_sim * edge_attr
-
-    return edge_att
-
-
 def print_graph_diameter(x, edge_index, approximate=False):
     data = pyg.data.Data(x=x, edge_index=edge_index)
 
