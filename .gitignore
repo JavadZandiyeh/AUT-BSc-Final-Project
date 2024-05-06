@@ -1,4 +1,13 @@
-dataset
+dataset/imdb/data-1m
+dataset/imdb/crawl/preparation/imdb/imdb-1m
+dataset/imdb/crawl/preparation/imdb/imdb-25m
+dataset/imdb/crawl/preparation/imdb/imdb-scrapy/imdb/*.csv
+dataset/imdb/crawl/preparation/movielens/ml-1m/
+dataset/imdb/crawl/preparation/movielens/ml-25m/
+dataset/imdb/crawl/preparation/movielens/ml-25m-cleaned/*.csv
+dataset/imdb/crawl/feature-engineering/imdb/imdb-1m
+dataset/imdb/crawl/feature-engineering/imdb/imdb-25m
+dataset/imdb/crawl/data-splitting/data-1m
 main/__pycache__
 .idea/
 .DS_Store
